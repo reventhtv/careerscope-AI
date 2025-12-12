@@ -787,5 +787,56 @@ def run():
             else:
                 st.error("Wrong ID & Password Provided")
 
+# ------------------ AI Suggestions Section ------------------
+try:
+    from ai_client import ask_ai
+except Exception as _e:
+    def ask_ai(prompt: str):
+        return "AI suggestions not configured. Add AI_API_KEY to Streamlit secrets to enable."
+
+import streamlit as st
+
+st.markdown("---")
+st.subheader("AI-powered Suggestions")
+
+_possible_keys = ["resume_text", "text", "doc_text", "parsed_text", "resume_str", "extracted_text"]
+resume_text = None
+
+# 1) Check globals
+for k in _possible_keys:
+    if k in globals() and globals().get(k):
+        resume_text = globals().get(k)
+        break
+
+# 2) Check session_state
+if not resume_text:
+    for k in _possible_keys:
+        if st.session_state.get(k):
+            resume_text = st.session_state.get(k)
+            break
+
+# 3) Fallback: let user paste text
+if not resume_text:
+    st.info("No parsed resume text detected. Paste resume text here to get AI suggestions.")
+    resume_text = st.text_area("Paste resume text (optional)", value="", height=200)
+
+if st.button("Get AI suggestions"):
+    with st.spinner("Generating AI suggestions..."):
+        try:
+            prompt = (
+                "You are an expert career coach. Analyze this resume and provide:\n"
+                "1) Top strengths\n"
+                "2) Weaknesses or missing items\n"
+                "3) Key ATS keywords to add\n"
+                "4) Improvements to professional summary\n\n"
+                f"Resume:\n{resume_text}"
+            )
+            ai_out = ask_ai(prompt)
+            st.success("AI Suggestions")
+            st.write(ai_out)
+        except Exception as e:
+            st.error(f"AI error: {e}")
+# -------------------------------------------------------------------------------
+
 # Calling the main (run()) function to make the whole process run
 run()
