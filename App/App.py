@@ -1,11 +1,10 @@
 # App/UploadedResumes/App.py
-# Cleaned & resilient version of the original App.py
-# - Keeps pyresparser usage
-# - Makes optional libs safe
-# - Ensures NLTK + spaCy model attempts before importing pyresparser
-# - Unified PDF extraction helper (pdfminer.six preferred, pdfplumber fallback)
-# - Optional DB writes (only if connection successfully established)
-# - AI suggestions section kept (uses ai_client.ask_ai)
+# DB-DISABLED version of Resume Analyzer
+# - No pymysql / DB connection attempted
+# - Writes simple local CSV logs instead of DB inserts (for demo)
+# - Keeps pyresparser and ai_client integration
+# - Robust NLTK + spaCy handling for pyresparser
+# - Unified PDF extraction (pdfminer.six preferred, pdfplumber fallback)
 
 import os
 import io
@@ -15,43 +14,16 @@ import time
 import datetime
 import socket
 import platform
-import secrets as pysecrets  # avoid name clash with `secrets` logic
+import secrets as pysecrets
+from pathlib import Path
 from PIL import Image
 
-# ----------------- Safe optional imports -----------------
-_missing_libs = []
-
-def _try_import(name, alias=None):
-    try:
-        module = __import__(name)
-        if alias:
-            globals()[alias] = module
-        else:
-            globals()[name] = module
-        return module
-    except Exception:
-        _missing_libs.append(name)
-        globals()[alias or name] = None
-        return None
-
-# required core
+# Core libs
 import streamlit as st
 import pandas as pd
-import requests
-
-# optional (try to import; if missing, we will degrade gracefully)
-_try_import("pymysql")        # database (optional)
-_try_import("geocoder")       # IP -> latlong (optional)
-_try_import("geopy")          # geocoding (optional)
-_try_import("plotly.express", "px")   # plotting (optional)
-_try_import("plotly.graph_objects", "go")
-_try_import("streamlit_tags") # tags input
-_try_import("pdfplumber")     # pdf fallback
-# pdfminer will be imported below in a safe manner
-
-# ----------------- Ensure NLTK data present BEFORE importing pyresparser -----------------
 import nltk
 
+# ========== NLTK prep (ensure required corpora exist) ==========
 NLTK_DATA_DIR = os.path.join(os.getcwd(), "nltk_data")
 os.makedirs(NLTK_DATA_DIR, exist_ok=True)
 if NLTK_DATA_DIR not in nltk.data.path:
@@ -69,57 +41,71 @@ for pkg in _required_nltk:
     except LookupError:
         try:
             nltk.download(pkg, download_dir=NLTK_DATA_DIR, quiet=True)
-        except Exception:
-            # log to console; Streamlit logs will capture this
-            print(f"Warning: failed to download NLTK package: {pkg}")
+        except Exception as e:
+            print(f"Warning: NLTK download failed for {pkg}: {e}")
 
-# ----------------- Ensure spaCy + model available (for pyresparser) -----------------
-# pyresparser expects spaCy (usually v2) and en_core_web_sm model.
+# ========== Try to ensure spaCy model available (best-effort) ==========
 _spacy_ok = False
 try:
     import spacy
-    # try loading model
     try:
-        _ = spacy.load("en_core_web_sm")
+        spacy.load("en_core_web_sm")
         _spacy_ok = True
     except Exception:
-        # Try programmatic download (may take time on first run)
+        # attempt programmatic download (may or may not be allowed)
         try:
             import subprocess, sys
             subprocess.run([sys.executable, "-m", "spacy", "download", "en_core_web_sm"], check=True)
-            _ = spacy.load("en_core_web_sm")
+            spacy.load("en_core_web_sm")
             _spacy_ok = True
         except Exception as e:
-            print("spaCy model en_core_web_sm not available and automatic download failed:", e)
+            print("spaCy model not available; pyresparser may fail without it:", e)
             _spacy_ok = False
 except Exception:
     _spacy_ok = False
 
-# ----------------- Import pyresparser (now that NLTK prepared) -----------------
+# ========== Optional imports (graceful) ==========
+_missing = []
+def _try_import(name, alias=None):
+    try:
+        module = __import__(name)
+        if alias:
+            globals()[alias] = module
+        else:
+            globals()[name] = module
+        return module
+    except Exception:
+        _missing.append(name)
+        globals()[alias or name] = None
+        return None
+
+_try_import("pdfplumber")
+_try_import("plotly.express", "px")
+_try_import("plotly.graph_objects", "go")
+_try_import("streamlit_tags")
+
+# ========== pyresparser import (after NLTK/spaCy prep) ==========
 try:
     from pyresparser import ResumeParser
 except Exception as e:
-    # If import fails, set to None and show helpful message later
     ResumeParser = None
-    print("Warning: pyresparser not available or failed to import:", e)
+    print("pyresparser import failed:", e)
 
-# ----------------- Robust pdfminer/pdfplumber support -----------------
+# ========== PDF extraction: prefer pdfminer.six, fallback to pdfplumber ==========
 _pdfminer_available = False
 pdfminer_extract_text = None
 try:
-    # prefer pdfminer.six imports
     from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
     from pdfminer.converter import TextConverter
     from pdfminer.layout import LAParams
     from pdfminer.pdfpage import PDFPage
+
     def _pdfminer_extract_text(path_or_file):
-        # path_or_file can be path or file-like
         resource_manager = PDFResourceManager()
         fake_file_handle = io.StringIO()
         laparams = LAParams()
         converter = TextConverter(resource_manager, fake_file_handle, laparams=laparams)
         interpreter = PDFPageInterpreter(resource_manager, converter)
-        # handle file path
         if isinstance(path_or_file, str):
             fh = open(path_or_file, "rb")
             close_after = True
@@ -136,12 +122,12 @@ try:
             if close_after:
                 fh.close()
         return text
+
     pdfminer_extract_text = _pdfminer_extract_text
     _pdfminer_available = True
 except Exception:
     _pdfminer_available = False
 
-# pdfplumber fallback
 _pdfplumber_available = False
 try:
     import pdfplumber as _pdfplumber
@@ -150,16 +136,11 @@ except Exception:
     _pdfplumber_available = False
 
 def extract_text_from_pdf(path_or_file):
-    """
-    Unified PDF extraction helper. Accepts path string or file-like object.
-    Tries pdfminer.six first, then pdfplumber.
-    """
-    if _pdfminer_available:
+    if _pdfminer_available and pdfminer_extract_text:
         try:
             return pdfminer_extract_text(path_or_file)
-        except Exception as e:
-            print("pdfminer extraction failed, falling back to pdfplumber:", e)
-
+        except Exception:
+            pass
     if _pdfplumber_available:
         try:
             if isinstance(path_or_file, str):
@@ -169,84 +150,73 @@ def extract_text_from_pdf(path_or_file):
                 with _pdfplumber.open(path_or_file) as pdf:
                     pages = [p.extract_text() or "" for p in pdf.pages]
             return "\n".join(pages)
-        except Exception as e:
-            print("pdfplumber extraction failed:", e)
-
+        except Exception:
+            pass
     raise RuntimeError("No PDF extraction backend available. Install pdfminer.six or pdfplumber.")
 
-# ----------------- Import other utilities -----------------
+# ========== Courses import (local) ==========
 try:
-    from streamlit_tags import st_tags
+    from Courses import ds_course, web_course, android_course, ios_course, uiux_course, resume_videos, interview_videos
 except Exception:
-    # fallback function if st_tags not available
-    def st_tags(label="", text="", value=None, key=None):
-        # display simple text list
-        if value:
-            st.write(f"{label} {', '.join(value)}")
-        else:
-            st.write(label)
-
-# ----------------- Courses list import (local) -----------------
-try:
-    from Courses import ds_course,web_course,android_course,ios_course,uiux_course,resume_videos,interview_videos
-except Exception:
-    # Fallback small lists if Courses.py missing
     ds_course = web_course = android_course = ios_course = uiux_course = []
     resume_videos = interview_videos = []
 
-# ----------------- Safe DB connection (optional) -----------------
-_db_conn = None
-_db_cursor = None
-try:
-    # If Streamlit Secrets provide DB config, use them; otherwise attempt localhost default
-    DB_HOST = os.environ.get("DB_HOST") or (st.secrets.get("DB_HOST") if hasattr(st, "secrets") else None) or "localhost"
-    DB_USER = os.environ.get("DB_USER") or (st.secrets.get("DB_USER") if hasattr(st, "secrets") else None) or "root"
-    DB_PASS = os.environ.get("DB_PASS") or (st.secrets.get("DB_PASS") if hasattr(st, "secrets") else None) or ""
-    DB_NAME = os.environ.get("DB_NAME") or (st.secrets.get("DB_NAME") if hasattr(st, "secrets") else None) or "cv"
-    if globals().get("pymysql"):
-        try:
-            _db_conn = pymysql.connect(host=DB_HOST, user=DB_USER, password=DB_PASS, db=DB_NAME)
-            _db_cursor = _db_conn.cursor()
-        except Exception as e:
-            print("DB connection failed or DB not accessible:", e)
-            _db_conn = None
-            _db_cursor = None
-except Exception as e:
-    print("Pymysql import/connection issue:", e)
-    _db_conn = None
-    _db_cursor = None
+# ========== DB-disabled logging (local CSV) ==========
+LOG_DIR = Path("./data_logs")
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+USER_LOG_CSV = LOG_DIR / "user_data_log.csv"
+FEEDBACK_LOG_CSV = LOG_DIR / "feedback_log.csv"
 
-# Helper DB insert functions (no-op if DB not connected)
-def insert_data(*args, **kwargs):
-    if _db_conn and _db_cursor:
-        try:
-            sec_token, ip_add, host_name, dev_user, os_name_ver, latlong, city, state, country, act_name, act_mail, act_mob, name, email, res_score, timestamp, no_of_pages, reco_field, cand_level, skills, recommended_skills, courses, pdf_name = args
-            DB_table_name = 'user_data'
-            insert_sql = "insert into " + DB_table_name + """
-            values (0,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"""
-            rec_values = (str(sec_token),str(ip_add),host_name,dev_user,os_name_ver,str(latlong),city,state,country,act_name,act_mail,act_mob,name,email,str(res_score),timestamp,str(no_of_pages),reco_field,cand_level,skills,recommended_skills,courses,pdf_name)
-            _db_cursor.execute(insert_sql, rec_values)
-            _db_conn.commit()
-        except Exception as e:
-            print("DB insert_data error:", e)
+def insert_data(sec_token, ip_add, host_name, dev_user, os_name_ver, latlong, city, state, country,
+                act_name, act_mail, act_mob, name, email, res_score, timestamp, no_of_pages,
+                reco_field, cand_level, skills, recommended_skills, courses, pdf_name):
+    # Append a single-row CSV for demo logging. No DB required.
+    row = {
+        "sec_token": sec_token,
+        "ip_add": ip_add,
+        "host_name": host_name,
+        "dev_user": dev_user,
+        "os_name_ver": os_name_ver,
+        "latlong": latlong,
+        "city": city,
+        "state": state,
+        "country": country,
+        "act_name": act_name,
+        "act_mail": act_mail,
+        "act_mob": act_mob,
+        "name": name,
+        "email": email,
+        "resume_score": res_score,
+        "timestamp": timestamp,
+        "no_of_pages": no_of_pages,
+        "reco_field": reco_field,
+        "cand_level": cand_level,
+        "skills": skills,
+        "recommended_skills": recommended_skills,
+        "courses": courses,
+        "pdf_name": pdf_name
+    }
+    df = pd.DataFrame([row])
+    if USER_LOG_CSV.exists():
+        df.to_csv(USER_LOG_CSV, mode="a", header=False, index=False)
     else:
-        print("DB not configured; skipping insert_data.")
+        df.to_csv(USER_LOG_CSV, index=False)
 
-def insertf_data(feed_name,feed_email,feed_score,comments,Timestamp):
-    if _db_conn and _db_cursor:
-        try:
-            DBf_table_name = 'user_feedback'
-            insertfeed_sql = "insert into " + DBf_table_name + """
-            values (0,%s,%s,%s,%s,%s)"""
-            rec_values = (feed_name, feed_email, feed_score, comments, Timestamp)
-            _db_cursor.execute(insertfeed_sql, rec_values)
-            _db_conn.commit()
-        except Exception as e:
-            print("DB insertf_data error:", e)
+def insertf_data(feed_name, feed_email, feed_score, comments, Timestamp):
+    row = {
+        "feed_name": feed_name,
+        "feed_email": feed_email,
+        "feed_score": feed_score,
+        "comments": comments,
+        "Timestamp": Timestamp
+    }
+    df = pd.DataFrame([row])
+    if FEEDBACK_LOG_CSV.exists():
+        df.to_csv(FEEDBACK_LOG_CSV, mode="a", header=False, index=False)
     else:
-        print("DB not configured; skipping insertf_data.")
+        df.to_csv(FEEDBACK_LOG_CSV, index=False)
 
-# ----------------- Utility helpers -----------------
+# ========== Helpers ==========
 def get_csv_download_link(df, filename, text):
     csv = df.to_csv(index=False)
     b64 = base64.b64encode(csv.encode()).decode()
@@ -276,12 +246,11 @@ def course_recommender(course_list):
             break
     return rec_course
 
-# ----------------- Page config -----------------
+# ========== Page config ==========
 st.set_page_config(page_title="AI Resume Analyzer", page_icon='./Logo/recommend.png')
 
-# ----------------- Main application -----------------
+# ========== Main ==========
 def run():
-    # header / sidebar
     try:
         img = Image.open('./Logo/RESUM.png')
         st.image(img)
@@ -294,63 +263,15 @@ def run():
     link = '<b>Built with 🤍 by <a href="https://dnoobnerd.netlify.app/" style="text-decoration: none; color: #021659;">Deepak Padhi</a></b>'
     st.sidebar.markdown(link, unsafe_allow_html=True)
 
-    # create upload folder if not exists
     os.makedirs("./Uploaded_Resumes", exist_ok=True)
 
-    # Create DB tables if DB connected
-    if _db_conn and _db_cursor:
-        try:
-            cursor = _db_cursor
-            cursor.execute("CREATE DATABASE IF NOT EXISTS CV;")
-            # create tables (simple - same as before)
-            cursor.execute("""CREATE TABLE IF NOT EXISTS user_data (
-                                ID INT NOT NULL AUTO_INCREMENT,
-                                sec_token varchar(20) NOT NULL,
-                                ip_add varchar(50) NULL,
-                                host_name varchar(50) NULL,
-                                dev_user varchar(50) NULL,
-                                os_name_ver varchar(50) NULL,
-                                latlong varchar(50) NULL,
-                                city varchar(50) NULL,
-                                state varchar(50) NULL,
-                                country varchar(50) NULL,
-                                act_name varchar(50) NOT NULL,
-                                act_mail varchar(50) NOT NULL,
-                                act_mob varchar(20) NOT NULL,
-                                Name varchar(500) NOT NULL,
-                                Email_ID VARCHAR(500) NOT NULL,
-                                resume_score VARCHAR(8) NOT NULL,
-                                Timestamp VARCHAR(50) NOT NULL,
-                                Page_no VARCHAR(5) NOT NULL,
-                                Predicted_Field BLOB NOT NULL,
-                                User_level BLOB NOT NULL,
-                                Actual_skills BLOB NOT NULL,
-                                Recommended_skills BLOB NOT NULL,
-                                Recommended_courses BLOB NOT NULL,
-                                pdf_name varchar(50) NOT NULL,
-                                PRIMARY KEY (ID)
-                            );""")
-            cursor.execute("""CREATE TABLE IF NOT EXISTS user_feedback (
-                                ID INT NOT NULL AUTO_INCREMENT,
-                                feed_name varchar(50) NOT NULL,
-                                feed_email VARCHAR(50) NOT NULL,
-                                feed_score VARCHAR(5) NOT NULL,
-                                comments VARCHAR(100) NULL,
-                                Timestamp VARCHAR(50) NOT NULL,
-                                PRIMARY KEY (ID)
-                            );""")
-        except Exception as e:
-            print("DB table creation skipped or failed:", e)
-
-    # ----------------- USER flow -----------------
-    if choice == 'User':
-        # Basic info
+    # ---------- USER ----------
+    if choice == "User":
         act_name = st.text_input('Name*')
         act_mail = st.text_input('Mail*')
         act_mob  = st.text_input('Mobile Number*')
         sec_token = pysecrets.token_urlsafe(12)
 
-        # host/ip info (safe fallbacks)
         try:
             host_name = socket.gethostname()
         except Exception:
@@ -367,55 +288,49 @@ def run():
 
         os_name_ver = platform.system() + " " + platform.release()
 
-        # geolocation (optional)
+        # geolocation (optional, best-effort)
         latlong = None
         city = state = country = ""
         try:
             if globals().get("geocoder"):
                 g = geocoder.ip('me')
                 latlong = g.latlng
-            if globals().get("geopy"):
+            if globals().get("geopy") and latlong:
                 geolocator = geopy.geocoders.Nominatim(user_agent="http")
-                if latlong:
-                    try:
-                        location = geolocator.reverse(latlong, language='en')
-                        address = location.raw.get('address', {})
-                        city = address.get('city', '') or address.get('town', '') or address.get('village','')
-                        state = address.get('state', '')
-                        country = address.get('country', '')
-                    except Exception:
-                        city = state = country = ""
+                try:
+                    location = geolocator.reverse(latlong, language='en')
+                    address = location.raw.get('address', {})
+                    city = address.get('city', '') or address.get('town', '') or address.get('village','')
+                    state = address.get('state', '')
+                    country = address.get('country', '')
+                except Exception:
+                    city = state = country = ""
         except Exception:
             latlong = None
             city = state = country = ""
 
-        # Upload Resume
         st.markdown('''<h5 style='text-align: left; color: #021659;'> Upload Your Resume, And Get Smart Recommendations</h5>''',unsafe_allow_html=True)
         pdf_file = st.file_uploader("Choose your Resume", type=["pdf"])
         if pdf_file is not None:
             with st.spinner('Hang On While We Cook Magic For You...'):
                 time.sleep(1)
 
-            # save file server-side for parsing (safe)
             save_image_path = os.path.join('./Uploaded_Resumes', pdf_file.name)
             pdf_name = pdf_file.name
             with open(save_image_path, "wb") as f:
                 f.write(pdf_file.getbuffer())
 
-            # preview
             try:
                 show_pdf(save_image_path)
             except Exception:
                 pass
 
-            # Extract text using unified helper
             try:
                 resume_text = extract_text_from_pdf(save_image_path)
             except Exception as e:
                 st.error("Failed to extract text from PDF: " + str(e))
                 resume_text = ""
 
-            # Parse with pyresparser if available
             resume_data = {}
             if ResumeParser:
                 try:
@@ -427,7 +342,6 @@ def run():
             else:
                 resume_data = {}
 
-            # UI: analysis
             if resume_data:
                 st.header("**Resume Analysis 🤘**")
                 try:
@@ -441,33 +355,38 @@ def run():
                 except Exception:
                     pass
 
-                # Estimate level
+                # candidate level guess
                 cand_level = "Fresher"
                 try:
                     no_of_pages = int(resume_data.get('no_of_pages') or 0)
                 except Exception:
                     no_of_pages = 0
-                # very naive heuristics (kept from original)
                 if no_of_pages < 1:
                     cand_level = "NA"
                     st.markdown("<h4 style='text-align: left; color: #d73b5c;'>You are at Fresher level!</h4>", unsafe_allow_html=True)
-                elif 'INTERNSHIP' in resume_text.upper():
+                elif 'INTERNSHIP' in (resume_text or "").upper():
                     cand_level = "Intermediate"
                     st.markdown("<h4 style='text-align: left; color: #1ed760;'>You are at intermediate level!</h4>", unsafe_allow_html=True)
-                elif 'EXPERIENCE' in resume_text.upper():
+                elif 'EXPERIENCE' in (resume_text or "").upper():
                     cand_level = "Experienced"
                     st.markdown("<h4 style='text-align: left; color: #fba171;'>You are at experience level!</h4>", unsafe_allow_html=True)
                 else:
                     cand_level = "Fresher"
                     st.markdown("<h4 style='text-align: left; color: #fba171;'>You are at Fresher level!!</h4>", unsafe_allow_html=True)
 
-                # skills (use pyresparser skills if available)
+                # skills
                 st.subheader("**Skills Recommendation 💡**")
                 skills_list = resume_data.get('skills') or []
-                keywords = st_tags(label='### Your Current Skills', text='See our skills recommendation below', value=skills_list, key='1')
+                try:
+                    st_tags = globals().get("st_tags") or None
+                    if st_tags:
+                        st_tags(label='### Your Current Skills', text='See our skills recommendation below', value=skills_list, key='1')
+                    else:
+                        st.write("Skills:", ", ".join(skills_list))
+                except Exception:
+                    st.write("Skills:", ", ".join(skills_list))
 
-                # determine recommended skills + course recommendations (kept logic)
-                # ... (kept original keyword lists and logic) ...
+                # keywords & recommendations (kept original logic)
                 ds_keyword = ['tensorflow','keras','pytorch','machine learning','deep learning','flask','streamlit']
                 web_keyword = ['react', 'django', 'node js', 'react js', 'php', 'laravel', 'magento', 'wordpress','javascript', 'angular js', 'c#', 'asp.net', 'flask']
                 android_keyword = ['android','android development','flutter','kotlin','xml','kivy']
@@ -480,14 +399,20 @@ def run():
                 rec_course = ''
 
                 for i in skills_list:
-                    if i is None: 
+                    if i is None:
                         continue
                     il = str(i).lower()
                     if il in ds_keyword:
                         reco_field = 'Data Science'
                         st.success("** Our analysis says you are looking for Data Science Jobs.**")
                         recommended_skills = ['Data Visualization','Predictive Analysis','Statistical Modeling','Data Mining','Clustering & Classification','Data Analytics','Quantitative Analysis','Web Scraping','ML Algorithms','Keras','Pytorch','Probability','Scikit-learn','Tensorflow','Flask','Streamlit']
-                        st_tags(label='### Recommended skills for you.', text='Recommended skills generated from System', value=recommended_skills, key='2')
+                        try:
+                            if globals().get("st_tags"):
+                                st_tags(label='### Recommended skills for you.', text='Recommended skills generated from System', value=recommended_skills, key='2')
+                            else:
+                                st.write("Recommended skills:", ", ".join(recommended_skills))
+                        except Exception:
+                            st.write("Recommended skills:", ", ".join(recommended_skills))
                         st.markdown("<h5 style='text-align: left; color: #1ed760;'>Adding these skills to resume will boost🚀 the chances of getting a Job</h5>", unsafe_allow_html=True)
                         rec_course = course_recommender(ds_course)
                         break
@@ -495,7 +420,13 @@ def run():
                         reco_field = 'Web Development'
                         st.success("** Our analysis says you are looking for Web Development Jobs **")
                         recommended_skills = ['React','Django','Node JS','React JS','PHP','Laravel','Magento','Wordpress','Javascript','Angular JS','C#','Flask','SDK']
-                        st_tags(label='### Recommended skills for you.', text='Recommended skills generated from System', value=recommended_skills, key='3')
+                        try:
+                            if globals().get("st_tags"):
+                                st_tags(label='### Recommended skills for you.', text='Recommended skills generated from System', value=recommended_skills, key='3')
+                            else:
+                                st.write("Recommended skills:", ", ".join(recommended_skills))
+                        except Exception:
+                            st.write("Recommended skills:", ", ".join(recommended_skills))
                         st.markdown("<h5 style='text-align: left; color: #1ed760;'>Adding these skills to resume will boost🚀 the chances of getting a Job💼</h5>", unsafe_allow_html=True)
                         rec_course = course_recommender(web_course)
                         break
@@ -503,7 +434,13 @@ def run():
                         reco_field = 'Android Development'
                         st.success("** Our analysis says you are looking for Android App Development Jobs **")
                         recommended_skills = ['Android','Android development','Flutter','Kotlin','XML','Java','Kivy','GIT','SDK','SQLite']
-                        st_tags(label='### Recommended skills for you.', text='Recommended skills generated from System', value=recommended_skills, key='4')
+                        try:
+                            if globals().get("st_tags"):
+                                st_tags(label='### Recommended skills for you.', text='Recommended skills generated from System', value=recommended_skills, key='4')
+                            else:
+                                st.write("Recommended skills:", ", ".join(recommended_skills))
+                        except Exception:
+                            st.write("Recommended skills:", ", ".join(recommended_skills))
                         st.markdown("<h5 style='text-align: left; color: #1ed760;'>Adding these skills to resume will boost🚀 the chances of getting a Job💼</h5>", unsafe_allow_html=True)
                         rec_course = course_recommender(android_course)
                         break
@@ -511,62 +448,65 @@ def run():
                         reco_field = 'IOS Development'
                         st.success("** Our analysis says you are looking for IOS App Development Jobs **")
                         recommended_skills = ['IOS','IOS Development','Swift','Cocoa','Cocoa Touch','Xcode','Objective-C','SQLite','Plist','StoreKit','UI-Kit','AV Foundation','Auto-Layout']
-                        st_tags(label='### Recommended skills for you.', text='Recommended skills generated from System', value=recommended_skills, key='5')
-                        st.markdown("<h5 style='text-align: left; color: #1ed760;'>Adding these skills to resume will boost🚀 the chances of getting a Job💼</h5>", unsafe_allow_html=True)
+                        try:
+                            if globals().get("st_tags"):
+                                st_tags(label='### Recommended skills for you.', text='Recommended skills generated from System', value=recommended_skills, key='5')
+                            else:
+                                st.write("Recommended skills:", ", ".join(recommended_skills))
+                        except Exception:
+                            st.write("Recommended skills:", ", ".join(recommended_skills))
                         rec_course = course_recommender(ios_course)
                         break
                     elif il in uiux_keyword:
                         reco_field = 'UI-UX Development'
                         st.success("** Our analysis says you are looking for UI-UX Development Jobs **")
                         recommended_skills = ['UI','User Experience','Adobe XD','Figma','Zeplin','Balsamiq','Prototyping','Wireframes','Storyframes','Adobe Photoshop','Editing','Illustrator','After Effects','Premier Pro','Indesign']
-                        st_tags(label='### Recommended skills for you.', text='Recommended skills generated from System', value=recommended_skills, key='6')
-                        st.markdown("<h5 style='text-align: left; color: #1ed760;'>Adding these skills to resume will boost🚀 the chances of getting a Job💼</h5>", unsafe_allow_html=True)
+                        try:
+                            if globals().get("st_tags"):
+                                st_tags(label='### Recommended skills for you.', text='Recommended skills generated from System', value=recommended_skills, key='6')
+                            else:
+                                st.write("Recommended skills:", ", ".join(recommended_skills))
+                        except Exception:
+                            st.write("Recommended skills:", ", ".join(recommended_skills))
                         rec_course = course_recommender(uiux_course)
                         break
                     elif il in n_any:
                         reco_field = 'NA'
                         st.warning("** Currently our tool only predicts and recommends for Data Science, Web, Android, IOS and UI/UX Development**")
                         recommended_skills = ['No Recommendations']
-                        st_tags(label='### Recommended skills for you.', text='Currently No Recommendations', value=recommended_skills, key='7')
-                        st.markdown("<h5 style='text-align: left; color: #092851;'>Maybe Available in Future Updates</h5>", unsafe_allow_html=True)
+                        try:
+                            if globals().get("st_tags"):
+                                st_tags(label='### Recommended skills for you.', text='Currently No Recommendations', value=recommended_skills, key='7')
+                            else:
+                                st.write("No recommendations available")
+                        except Exception:
+                            st.write("No recommendations available")
                         rec_course = "Sorry! Not Available for this Field"
                         break
 
-                # Resume scoring (kept logic but simplified)
+                # Resume scoring (simplified)
                 st.subheader("**Resume Tips & Ideas 🥂**")
                 resume_score = 0
-                text_upper = resume_text.upper() if isinstance(resume_text, str) else ""
+                text_upper = (resume_text or "").upper()
                 if "OBJECTIVE" in text_upper or "SUMMARY" in text_upper:
                     resume_score += 6
                     st.markdown("<h5 style='text-align: left; color: #1ed760;'>[+] Awesome! You have added Objective/Summary</h5>", unsafe_allow_html=True)
-                else:
-                    st.markdown("<h5 style='text-align: left; color: #000000;'>[-] Please add your career objective, it will give your career intention to the Recruiters.</h5>", unsafe_allow_html=True)
-
                 if "EDUCATION" in text_upper or "SCHOOL" in text_upper or "COLLEGE" in text_upper:
                     resume_score += 12
                     st.markdown("<h5 style='text-align: left; color: #1ed760;'>[+] Awesome! You have added Education Details</h5>", unsafe_allow_html=True)
-                else:
-                    st.markdown("<h5 style='text-align: left; color: #000000;'>[-] Please add Education. It will give Your Qualification level to the recruiter</h5>", unsafe_allow_html=True)
-
                 if "EXPERIENCE" in text_upper:
                     resume_score += 16
                     st.markdown("<h5 style='text-align: left; color: #1ed760;'>[+] Awesome! You have added Experience</h5>", unsafe_allow_html=True)
-                else:
-                    st.markdown("<h5 style='text-align: left; color: #000000;'>[-] Please add Experience. It will help you to stand out from crowd</h5>", unsafe_allow_html=True)
-
-                if "INTERNSHIP" in text_upper or "INTERNSHIPS" in text_upper:
+                if "INTERNSHIP" in text_upper:
                     resume_score += 6
                     st.markdown("<h5 style='text-align: left; color: #1ed760;'>[+] Awesome! You have added Internships</h5>", unsafe_allow_html=True)
-
-                if "SKILL" in text_upper or "SKILLS" in text_upper:
+                if "SKILL" in text_upper:
                     resume_score += 7
                     st.markdown("<h5 style='text-align: left; color: #1ed760;'>[+] Awesome! You have added Skills</h5>", unsafe_allow_html=True)
-
-                if "PROJECT" in text_upper or "PROJECTS" in text_upper:
+                if "PROJECT" in text_upper:
                     resume_score += 19
                     st.markdown("<h5 style='text-align: left; color: #1ed760;'>[+] Awesome! You have added your Projects</h5>", unsafe_allow_html=True)
 
-                # Score progress bar
                 st.subheader("**Resume Score 📝**")
                 my_bar = st.progress(0)
                 for percent_complete in range(min(resume_score, 100)):
@@ -575,13 +515,17 @@ def run():
                 st.success(f'** Your Resume Writing Score: {resume_score} **')
                 st.warning("** Note: This score is calculated based on the content that you have in your Resume. **")
 
-                # timestamp and DB insert
+                # Timestamp & local log
                 ts = time.time()
                 cur_date = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d')
                 cur_time = datetime.datetime.fromtimestamp(ts).strftime('%H:%M:%S')
                 timestamp = str(cur_date + '_' + cur_time)
 
-                insert_data(str(sec_token), str(ip_add), host_name, dev_user, os_name_ver, latlong, city, state, country, act_name, act_mail, act_mob, resume_data.get('name',''), resume_data.get('email',''), str(resume_score), timestamp, str(resume_data.get('no_of_pages','')), reco_field, cand_level, str(resume_data.get('skills','')), str(recommended_skills), str(rec_course), pdf_name)
+                # log to local CSV (DB-disabled)
+                insert_data(str(sec_token), str(ip_add), host_name, dev_user, os_name_ver, latlong, city, state, country,
+                            act_name, act_mail, act_mob, resume_data.get('name',''), resume_data.get('email',''),
+                            str(resume_score), timestamp, str(resume_data.get('no_of_pages','')), reco_field, cand_level,
+                            str(resume_data.get('skills','')), str(recommended_skills), str(rec_course), pdf_name)
 
                 # Bonus videos
                 try:
@@ -591,6 +535,7 @@ def run():
                         st.video(resume_vid)
                 except Exception:
                     pass
+
                 try:
                     st.header("**Bonus Video for Interview Tips💡**")
                     interview_vid = random.choice(interview_videos) if interview_videos else None
@@ -601,10 +546,10 @@ def run():
 
                 st.balloons()
             else:
-                st.error('Something went wrong while parsing resume. If parsing fails, try a different resume or paste text into the AI suggestions area.')
+                st.error('Something went wrong while parsing resume. Try pasting resume text into AI suggestions if parsing fails.')
 
-    # ----------------- FEEDBACK flow -----------------
-    elif choice == 'Feedback':
+    # ---------- FEEDBACK ----------
+    elif choice == "Feedback":
         ts = time.time()
         cur_date = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d')
         cur_time = datetime.datetime.fromtimestamp(ts).strftime('%H:%M:%S')
@@ -623,92 +568,74 @@ def run():
                 st.success("Thanks! Your Feedback was recorded.")
                 st.balloons()
 
-        # show past feedback if DB is available
-        if _db_conn and _db_cursor:
+        # show feedback log if exists
+        if FEEDBACK_LOG_CSV.exists():
             try:
-                plotfeed_data = pd.read_sql('select * from user_feedback', _db_conn)
-                labels = plotfeed_data.feed_score.unique()
-                values = plotfeed_data.feed_score.value_counts()
-                if px:
+                df = pd.read_csv(FEEDBACK_LOG_CSV)
+                st.subheader("**Past User Rating's**")
+                if 'feed_score' in df.columns and px:
+                    labels = df.feed_score.unique()
+                    values = df.feed_score.value_counts()
                     fig = px.pie(values=values, names=labels, title="Chart of User Rating Score From 1 - 5", color_discrete_sequence=px.colors.sequential.Aggrnyl)
                     st.plotly_chart(fig)
-                else:
-                    st.write("Plotly not available to show charts.")
-                cursor = _db_cursor
-                cursor.execute('select feed_name, comments from user_feedback')
-                plfeed_cmt_data = cursor.fetchall()
                 st.subheader("**User Comment's**")
-                dff = pd.DataFrame(plfeed_cmt_data, columns=['User', 'Comment'])
-                st.dataframe(dff, width=1000)
+                st.dataframe(df[['feed_name', 'comments']] if set(['feed_name','comments']).issubset(df.columns) else df)
             except Exception as e:
-                st.write("Feedback data unavailable:", e)
+                st.write("Unable to read feedback log:", e)
+        else:
+            st.info("No feedback recorded yet.")
 
-    # ----------------- ABOUT flow -----------------
-    elif choice == 'About':
+    # ---------- ABOUT ----------
+    elif choice == "About":
         st.subheader("**About The Tool - AI RESUME ANALYZER**")
         st.markdown("""
         <p>A tool which parses information from a resume using natural language processing and finds the keywords, cluster them onto sectors based on their keywords. And lastly show recommendations, predictions, analytics to the applicant based on keyword matching.</p>
-        <p><b>How to use it:</b> Upload your resume as PDF. Use Feedback to give feedback. Admin can login to view DB analytics.</p>
+        <p><b>How to use it:</b> Upload your resume as PDF. Use Feedback to give feedback. Admin can login to view local logs when available.</p>
         <p>Built with 🤍 by <a href="https://dnoobnerd.netlify.app/">Deepak Padhi</a>.</p>
         """, unsafe_allow_html=True)
 
-    # ----------------- ADMIN flow -----------------
+    # ---------- ADMIN ----------
     else:
-        st.success('Welcome to Admin Side')
+        st.success('Admin Panel (DB disabled)')
         ad_user = st.text_input("Username")
         ad_password = st.text_input("Password", type='password')
 
         if st.button('Login'):
             if ad_user == 'admin' and ad_password == 'admin@resume-analyzer':
-                # fetch user_data if available
-                if _db_conn and _db_cursor:
+                # show local logs instead of DB
+                if USER_LOG_CSV.exists():
                     try:
-                        cursor = _db_cursor
-                        cursor.execute('''SELECT ID, ip_add, resume_score, convert(Predicted_Field using utf8), convert(User_level using utf8), city, state, country from user_data''')
-                        datanalys = cursor.fetchall()
-                        plot_data = pd.DataFrame(datanalys, columns=['Idt', 'IP_add', 'resume_score', 'Predicted_Field', 'User_Level', 'City', 'State', 'Country'])
-                        st.success(f"Welcome Deepak ! Total {plot_data.Idt.count()} User's Have Used Our Tool : )")
+                        dff = pd.read_csv(USER_LOG_CSV)
+                        st.header("**User's Data (local log)**")
+                        st.dataframe(dff)
+                        st.markdown(get_csv_download_link(dff, 'User_Data.csv', 'Download Report'), unsafe_allow_html=True)
                     except Exception as e:
-                        st.write("Unable to fetch admin analytics:", e)
-
-                    try:
-                        cursor.execute('''SELECT ID, sec_token, ip_add, act_name, act_mail, act_mob, convert(Predicted_Field using utf8), Timestamp, Name, Email_ID, resume_score, Page_no, pdf_name, convert(User_level using utf8), convert(Actual_skills using utf8), convert(Recommended_skills using utf8), convert(Recommended_courses using utf8), city, state, country, latlong, os_name_ver, host_name, dev_user from user_data''')
-                        data = cursor.fetchall()
-                        df = pd.DataFrame(data, columns=['ID', 'Token', 'IP Address', 'Name', 'Mail', 'Mobile Number', 'Predicted Field', 'Timestamp',
-                                                         'Predicted Name', 'Predicted Mail', 'Resume Score', 'Total Page',  'File Name',
-                                                         'User Level', 'Actual Skills', 'Recommended Skills', 'Recommended Course',
-                                                         'City', 'State', 'Country', 'Lat Long', 'Server OS', 'Server Name', 'Server User',])
-                        st.dataframe(df)
-                        st.markdown(get_csv_download_link(df,'User_Data.csv','Download Report'), unsafe_allow_html=True)
-                    except Exception as e:
-                        st.write("Unable to fetch full user data for admin:", e)
-
-                    # show pie charts (if plotly available)
-                    try:
-                        cursor.execute('select * from user_feedback')
-                        plotfeed_data = pd.read_sql('select * from user_feedback', _db_conn)
-                        labels = plotfeed_data.feed_score.unique()
-                        values = plotfeed_data.feed_score.value_counts()
-                        if px:
-                            fig = px.pie(values=values, names=labels, title="Chart of User Rating Score From 1 - 5", color_discrete_sequence=px.colors.sequential.Aggrnyl)
-                            st.plotly_chart(fig)
-                    except Exception as e:
-                        st.write("Admin charts unavailable:", e)
+                        st.write("Unable to read local user log:", e)
                 else:
-                    st.write("DB not configured - admin analytics disabled.")
+                    st.info("No user logs yet (DB was not configured).")
+
+                if FEEDBACK_LOG_CSV.exists():
+                    try:
+                        dff2 = pd.read_csv(FEEDBACK_LOG_CSV)
+                        st.header("**Feedback (local log)**")
+                        st.dataframe(dff2)
+                        st.markdown(get_csv_download_link(dff2, 'Feedback_Data.csv', 'Download Feedback Report'), unsafe_allow_html=True)
+                    except Exception as e:
+                        st.write("Unable to read feedback log:", e)
+                else:
+                    st.info("No feedback logs yet.")
             else:
                 st.error("Wrong ID & Password Provided")
 
-    # ----------------- AI Suggestions Section -----------------
+    # ---------- AI Suggestions ----------
     try:
         from ai_client import ask_ai
-    except Exception as _e:
+    except Exception:
         def ask_ai(prompt: str):
-            return "AI suggestions not configured. Add AI_API_KEY to Streamlit secrets to enable."
+            return "AI suggestions not configured. Add AI_API_KEY or service account JSON to Streamlit secrets to enable."
 
     st.markdown("---")
     st.subheader("AI-powered Suggestions")
-
     _possible_keys = ["resume_text", "text", "doc_text", "parsed_text", "resume_str", "extracted_text"]
     resume_text = None
 
@@ -717,14 +644,12 @@ def run():
         if k in globals() and globals().get(k):
             resume_text = globals().get(k)
             break
-
     # 2) Check session_state
     if not resume_text:
         for k in _possible_keys:
             if st.session_state.get(k):
                 resume_text = st.session_state.get(k)
                 break
-
     # 3) Fallback: let user paste text
     if not resume_text:
         st.info("No parsed resume text detected. Paste resume text here to get AI suggestions.")
@@ -747,6 +672,5 @@ def run():
             except Exception as e:
                 st.error(f"AI error: {e}")
 
-# run app
 if __name__ == "__main__":
     run()
