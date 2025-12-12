@@ -3,3 +3,5 @@ requests
 pandas
 numpy
 pdfplumber
+PyMySQL==1.0.2
+
