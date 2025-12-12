@@ -325,11 +325,20 @@ def run():
             except Exception:
                 pass
 
-            try:
-                resume_text = extract_text_from_pdf(save_image_path)
-            except Exception as e:
-                st.error("Failed to extract text from PDF: " + str(e))
-                resume_text = ""
+try:
+    resume_text = extract_text_from_pdf(save_image_path)
+except Exception as e:
+    st.error("Failed to extract text from PDF: " + str(e))
+    resume_text = ""
+
+# Save parsed/extracted text so AI suggestions can find it
+try:
+    # keep a global name too (some code checks globals())
+    globals()["resume_text"] = resume_text
+    # also save to Streamlit session so UI picks it up
+    st.session_state["resume_text"] = resume_text
+except Exception:
+    pass
 
             resume_data = {}
             if ResumeParser:
