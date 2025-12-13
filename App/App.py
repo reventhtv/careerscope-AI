@@ -1,11 +1,8 @@
 import streamlit as st
 import os
-import io
 import re
-import time
 import random
 import base64
-from PIL import Image
 import pdfplumber
 
 from streamlit_tags import st_tags
@@ -86,11 +83,7 @@ def detect_experience_level(resume_text: str, pages: int | None = None) -> str:
 
 # ================= FEATURE 2: RESUME SCORE =================
 
-def calculate_resume_score(resume_text: str) -> tuple[int, list[str]]:
-    """
-    Simple heuristic-based resume scoring.
-    Returns (score out of 100, feedback list)
-    """
+def calculate_resume_score(resume_text: str):
     if not resume_text:
         return 0, ["No resume text found."]
 
@@ -98,24 +91,67 @@ def calculate_resume_score(resume_text: str) -> tuple[int, list[str]]:
     score = 0
     feedback = []
 
-    checks = {
-        "summary": (["summary", "objective", "profile"], 10, "Add a professional summary."),
-        "education": (["education", "university", "college", "degree"], 15, "Add education details."),
-        "experience": (["experience", "work experience"], 20, "Add work experience section."),
-        "skills": (["skills", "technical skills"], 15, "Add a skills section."),
-        "projects": (["projects", "project"], 15, "Add project details."),
-        "certifications": (["certification", "certifications"], 10, "Add certifications."),
-        "achievements": (["achievement", "achievements"], 10, "Add achievements or awards."),
-        "internships": (["internship", "internships"], 5, "Add internship experience."),
+    sections = {
+        "summary": (["summary", "objective", "profile"], 10),
+        "education": (["education", "degree", "university"], 15),
+        "experience": (["experience", "work experience"], 20),
+        "skills": (["skills", "technical skills"], 15),
+        "projects": (["project", "projects"], 15),
+        "certifications": (["certification", "certifications"], 10),
+        "achievements": (["achievement", "achievements"], 10),
+        "internships": (["internship", "internships"], 5),
     }
 
-    for _, (keywords, points, suggestion) in checks.items():
-        if any(k in text for k in keywords):
+    for name, (keys, points) in sections.items():
+        if any(k in text for k in keys):
             score += points
         else:
-            feedback.append(suggestion)
+            feedback.append(f"Consider adding a {name} section.")
 
     return min(score, 100), feedback
+
+# ================= FEATURE 3: DOMAIN DETECTION =================
+
+def detect_domain(skills, resume_text):
+    text = (resume_text or "").lower()
+    skills = [s.lower() for s in skills]
+
+    domains = {
+        "Data Science": (
+            ["python", "ml", "ai", "tensorflow", "pytorch", "data analysis"],
+            ds_course
+        ),
+        "Web Development": (
+            ["react", "django", "flask", "javascript", "html", "css"],
+            web_course
+        ),
+        "Android Development": (
+            ["android", "kotlin", "flutter", "java"],
+            android_course
+        ),
+        "iOS Development": (
+            ["ios", "swift", "xcode"],
+            ios_course
+        ),
+        "UI/UX Design": (
+            ["figma", "ux", "ui", "wireframe", "prototype"],
+            uiux_course
+        ),
+        "Embedded Systems": (
+            ["embedded", "microcontroller", "arm", "avr", "rtos", "firmware", "c", "c++"],
+            []
+        ),
+        "Telecommunications": (
+            ["telecom", "lte", "5g", "4g", "rf", "wireless", "networking", "protocol"],
+            []
+        ),
+    }
+
+    for domain, (keywords, courses) in domains.items():
+        if any(k in skills or k in text for k in keywords):
+            return domain, courses
+
+    return "General / Undetermined", []
 
 # =============================================================
 
@@ -123,10 +159,7 @@ def calculate_resume_score(resume_text: str) -> tuple[int, list[str]]:
 
 st.title("AI-Powered Resume Analyzer")
 
-choice = st.sidebar.selectbox(
-    "Choose section",
-    ["User", "About"]
-)
+choice = st.sidebar.selectbox("Choose section", ["User", "About"])
 
 # ================= USER =================
 
@@ -144,124 +177,79 @@ if choice == "User":
 
         show_pdf(save_path)
 
-        # ---------- Extract text ----------
         try:
             resume_text = extract_text_from_pdf(save_path)
         except Exception:
             resume_text = ""
 
-        # Store for AI section
         st.session_state["resume_text"] = resume_text
-        globals()["resume_text"] = resume_text
 
-        # ---------- Parse resume (safe) ----------
-        resume_data = {}
+        # ---------- Basic parsing ----------
+        email = re.search(r"\S+@\S+\.\S+", resume_text or "")
+        phone = re.search(r"\+?\d[\d\s\-]{8,}", resume_text or "")
 
-        try:
-            from pyresparser import ResumeParser
-            parsed = ResumeParser(save_path).get_extracted_data()
-            if parsed:
-                resume_data = parsed
-        except Exception:
-            resume_data = {}
+        skills = []
+        keywords = [
+            "python","java","c++","c","react","django","flask","sql","aws",
+            "ml","ai","tensorflow","pytorch","docker","kubernetes",
+            "javascript","html","css","flutter","kotlin","swift",
+            "embedded","rtos","microcontroller","arm","lte","5g","rf"
+        ]
 
-        # ---------- Fallback parsing ----------
-        if not resume_data:
-            email = re.search(r"\S+@\S+\.\S+", resume_text or "")
-            phone = re.search(r"\+?\d[\d\s\-]{8,}", resume_text or "")
+        for kw in keywords:
+            if kw in (resume_text or "").lower():
+                skills.append(kw)
 
-            skills = []
-            keywords = [
-                "python","java","c++","react","django","flask","sql","aws",
-                "ml","ai","tensorflow","pytorch","docker","kubernetes",
-                "javascript","html","css","flutter","kotlin","swift"
-            ]
-            for kw in keywords:
-                if kw in (resume_text or "").lower():
-                    skills.append(kw)
-
-            resume_data = {
-                "email": email.group(0) if email else "",
-                "mobile_number": phone.group(0) if phone else "",
-                "skills": skills,
-                "no_of_pages": resume_text.count("\f") + 1 if resume_text else 1
-            }
+        pages = resume_text.count("\f") + 1 if resume_text else 1
 
         # ---------- Display ----------
         st.header("Resume Analysis")
+        st.write("**Email:**", email.group(0) if email else "")
+        st.write("**Phone:**", phone.group(0) if phone else "")
+        st.write("**Pages:**", pages)
 
-        st.write("**Email:**", resume_data.get("email", ""))
-        st.write("**Phone:**", resume_data.get("mobile_number", ""))
-        st.write("**Pages:**", resume_data.get("no_of_pages", 1))
-
-        # ===== Experience Level =====
-        experience_level = detect_experience_level(
-            resume_text,
-            pages=resume_data.get("no_of_pages", 1)
-        )
-
+        # Experience level
+        level = detect_experience_level(resume_text, pages)
         st.subheader("🧭 Experience Level")
-        if experience_level == "Experienced":
-            st.success("🟢 Experienced")
-        elif experience_level == "Intermediate":
-            st.info("🟡 Intermediate")
-        else:
-            st.warning("🔵 Fresher")
+        st.info(level)
 
-        # ===== Resume Score =====
+        # Resume score
         st.subheader("📊 Resume Score")
-
-        score, score_feedback = calculate_resume_score(resume_text)
-
+        score, feedback = calculate_resume_score(resume_text)
         st.progress(score / 100)
-        st.metric(label="Resume Score", value=f"{score} / 100")
+        st.metric("Score", f"{score}/100")
+        for f in feedback:
+            st.write("•", f)
 
-        if score_feedback:
-            st.markdown("**Suggestions to improve your score:**")
-            for item in score_feedback:
-                st.write("•", item)
+        # Domain detection
+        domain, domain_courses = detect_domain(skills, resume_text)
+        st.subheader("🎯 Best-fit Domain")
+        st.success(domain)
 
-        # ===== Skills =====
+        # Skills
         st.subheader("Detected Skills")
-        st_tags(
-            label="Skills",
-            value=resume_data.get("skills", []),
-            key="skills"
-        )
+        st_tags(label="Skills", value=skills, key="skills")
 
-        # ---------- Recommendations ----------
-        skills_lower = [s.lower() for s in resume_data.get("skills", [])]
+        # Courses
+        if domain_courses:
+            course_recommender(domain_courses)
+        else:
+            st.info("No predefined courses for this domain yet.")
 
-        if any(s in skills_lower for s in ["python","ml","ai","tensorflow"]):
-            course_recommender(ds_course)
-        elif any(s in skills_lower for s in ["react","django","javascript"]):
-            course_recommender(web_course)
-        elif any(s in skills_lower for s in ["android","kotlin","flutter"]):
-            course_recommender(android_course)
-        elif any(s in skills_lower for s in ["ios","swift"]):
-            course_recommender(ios_course)
-        elif any(s in skills_lower for s in ["figma","ux","ui"]):
-            course_recommender(uiux_course)
-
-        # ---------- AI Suggestions ----------
+        # AI Suggestions
         st.markdown("---")
         st.subheader("🤖 AI Resume Suggestions")
 
         if st.button("Get AI Suggestions"):
             with st.spinner("Analyzing with Gemini…"):
                 prompt = (
-                    "You are a career coach.\n\n"
-                    "Analyze the following resume and provide:\n"
-                    "1. Strengths\n"
-                    "2. Weaknesses\n"
-                    "3. Missing ATS keywords\n"
-                    "4. Improvement suggestions\n\n"
-                    f"Resume:\n{resume_text}"
+                    "Analyze this resume and provide strengths, gaps, "
+                    "ATS keyword suggestions, and improvement tips:\n\n"
+                    f"{resume_text}"
                 )
-                out = ask_ai(prompt)
-                st.write(out)
+                st.write(ask_ai(prompt))
 
-        # ---------- Videos ----------
+        # Videos
         st.subheader("🎥 Resume Tips")
         st.video(random.choice(resume_videos))
 
@@ -274,11 +262,11 @@ else:
     st.markdown("""
     ### About AI Resume Analyzer
 
-    - Upload a resume
-    - Detect experience level
-    - Score resume quality
-    - Get AI-powered feedback using **Google Gemini**
-    - Designed for learning, demos & portfolios
+    - Detects **Experience Level**
+    - Calculates **Resume Score**
+    - Identifies **Best-fit Domain**
+    - Supports **Data Science, Web, Mobile, UI/UX, Embedded & Telecom**
+    - AI-powered suggestions using **Google Gemini**
 
     Built with ❤️ using Streamlit.
     """)
