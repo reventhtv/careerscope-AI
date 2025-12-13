@@ -84,7 +84,40 @@ def detect_experience_level(resume_text: str, pages: int | None = None) -> str:
 
     return "Fresher"
 
-# ===============================================================
+# ================= FEATURE 2: RESUME SCORE =================
+
+def calculate_resume_score(resume_text: str) -> tuple[int, list[str]]:
+    """
+    Simple heuristic-based resume scoring.
+    Returns (score out of 100, feedback list)
+    """
+    if not resume_text:
+        return 0, ["No resume text found."]
+
+    text = resume_text.lower()
+    score = 0
+    feedback = []
+
+    checks = {
+        "summary": (["summary", "objective", "profile"], 10, "Add a professional summary."),
+        "education": (["education", "university", "college", "degree"], 15, "Add education details."),
+        "experience": (["experience", "work experience"], 20, "Add work experience section."),
+        "skills": (["skills", "technical skills"], 15, "Add a skills section."),
+        "projects": (["projects", "project"], 15, "Add project details."),
+        "certifications": (["certification", "certifications"], 10, "Add certifications."),
+        "achievements": (["achievement", "achievements"], 10, "Add achievements or awards."),
+        "internships": (["internship", "internships"], 5, "Add internship experience."),
+    }
+
+    for _, (keywords, points, suggestion) in checks.items():
+        if any(k in text for k in keywords):
+            score += points
+        else:
+            feedback.append(suggestion)
+
+    return min(score, 100), feedback
+
+# =============================================================
 
 # ---------- UI ----------
 
@@ -148,7 +181,6 @@ if choice == "User":
                     skills.append(kw)
 
             resume_data = {
-                "name": "",
                 "email": email.group(0) if email else "",
                 "mobile_number": phone.group(0) if phone else "",
                 "skills": skills,
@@ -162,7 +194,7 @@ if choice == "User":
         st.write("**Phone:**", resume_data.get("mobile_number", ""))
         st.write("**Pages:**", resume_data.get("no_of_pages", 1))
 
-        # ===== Experience Level Display =====
+        # ===== Experience Level =====
         experience_level = detect_experience_level(
             resume_text,
             pages=resume_data.get("no_of_pages", 1)
@@ -173,12 +205,23 @@ if choice == "User":
             st.success("🟢 Experienced")
         elif experience_level == "Intermediate":
             st.info("🟡 Intermediate")
-        elif experience_level == "Fresher":
-            st.warning("🔵 Fresher")
         else:
-            st.write("Experience level could not be determined.")
-        # ===================================
+            st.warning("🔵 Fresher")
 
+        # ===== Resume Score =====
+        st.subheader("📊 Resume Score")
+
+        score, score_feedback = calculate_resume_score(resume_text)
+
+        st.progress(score / 100)
+        st.metric(label="Resume Score", value=f"{score} / 100")
+
+        if score_feedback:
+            st.markdown("**Suggestions to improve your score:**")
+            for item in score_feedback:
+                st.write("•", item)
+
+        # ===== Skills =====
         st.subheader("Detected Skills")
         st_tags(
             label="Skills",
@@ -232,8 +275,8 @@ else:
     ### About AI Resume Analyzer
 
     - Upload a resume
-    - Extract skills & information
     - Detect experience level
+    - Score resume quality
     - Get AI-powered feedback using **Google Gemini**
     - Designed for learning, demos & portfolios
 
