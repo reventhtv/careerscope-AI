@@ -38,17 +38,21 @@ def extract_text_from_pdf(path):
             text += page.extract_text() or ""
     return text
 
-def render_pdf_preview(path):
+def render_pdf_preview_all_pages(path):
     """
-    Streamlit-safe PDF preview:
-    - Renders first page as image
-    - Falls back gracefully
+    Streamlit-safe multi-page PDF preview.
+    Renders each page as an image stacked vertically.
     """
     try:
         with pdfplumber.open(path) as pdf:
-            first_page = pdf.pages[0]
-            image = first_page.to_image(resolution=150).original
-            st.image(image, caption="Resume Preview (Page 1)", use_column_width=True)
+            st.subheader("📄 Resume Preview")
+            for i, page in enumerate(pdf.pages, start=1):
+                image = page.to_image(resolution=150).original
+                st.image(
+                    image,
+                    caption=f"Page {i}",
+                    use_column_width=True
+                )
     except Exception:
         st.info("Preview not available. Please use the download option below.")
 
@@ -163,10 +167,10 @@ if choice == "User":
         with open(save_path, "wb") as f:
             f.write(pdf_file.getbuffer())
 
-        # ✅ FIXED PREVIEW
-        render_pdf_preview(save_path)
+        # ✅ MULTI-PAGE PREVIEW
+        render_pdf_preview_all_pages(save_path)
 
-        # Download button (always works)
+        # Download button
         with open(save_path, "rb") as f:
             st.download_button(
                 "⬇️ Download Resume (PDF)",
@@ -254,7 +258,7 @@ else:
     st.markdown("""
     ### About AI Resume Analyzer
 
-    - Resume preview (cloud-safe)
+    - Multi-page resume preview (scrollable)
     - Experience level detection
     - Resume scoring
     - Domain classification (incl. Embedded & Telecom)
