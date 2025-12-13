@@ -1,6 +1,5 @@
 import streamlit as st
 import os
-import re
 import csv
 import random
 import datetime
@@ -43,24 +42,31 @@ def render_pdf_preview_all_pages(path):
             img = page.to_image(resolution=150).original
             st.image(img, caption=f"Page {i}", use_column_width=True)
 
-def detect_experience_level(text, pages):
+# ================= Experience =================
+
+def detect_experience_level(text):
     if any(k in text for k in ["senior", "lead", "architect", "manager"]):
         return "Experienced"
     if any(k in text for k in ["internship", "intern", "trainee"]):
         return "Intermediate"
     return "Fresher"
 
+# ================= Resume Score =================
+
 def calculate_resume_score(text):
     score = 0
-    for sec in [
+    sections = [
         "summary", "education", "experience", "skills",
         "projects", "certification", "achievement", "internship"
-    ]:
+    ]
+    for sec in sections:
         if sec in text:
             score += 12
     return min(score, 100)
 
-def detect_domain_with_confidence(text):
+# ================= Domain Detection =================
+
+def detect_domain(text):
     scores = {
         "Telecommunications": 0,
         "Embedded Systems": 0,
@@ -87,25 +93,34 @@ def detect_domain_with_confidence(text):
         "Cybersecurity": ["security"]
     }
 
-    for d, keys in strong.items():
+    matched_keywords = {d: [] for d in scores}
+
+    for domain, keys in strong.items():
         for k in keys:
             if k in text:
-                scores[d] += 3
+                scores[domain] += 3
+                matched_keywords[domain].append(k)
 
-    for d, keys in weak.items():
+    for domain, keys in weak.items():
         for k in keys:
             if k in text:
-                scores[d] += 1
+                scores[domain] += 1
+                matched_keywords[domain].append(k)
 
+    company_boosts = []
     if "ericsson" in text:
         scores["Telecommunications"] += 6
+        company_boosts.append("Ericsson → Telecommunications (+6)")
     if "verisure" in text:
         scores["Embedded Systems"] += 5
+        company_boosts.append("Verisure → Embedded Systems (+5)")
 
     best = max(scores, key=scores.get)
     confidence = int((scores[best] / (sum(scores.values()) or 1)) * 100)
 
-    return best, confidence
+    return best, confidence, scores, matched_keywords, company_boosts
+
+# ================= Management =================
 
 def management_confidence(text):
     score = 0
@@ -113,6 +128,8 @@ def management_confidence(text):
     if "capm" in text: score += 30
     if "program manager" in text: score += 30
     return min(score, 100)
+
+# ================= ATS =================
 
 ATS_KEYWORDS = {
     "Telecommunications": ["o-ran", "link budget", "mac layer"],
@@ -125,6 +142,8 @@ ATS_KEYWORDS = {
 def ats_gap(domain, text):
     return [k for k in ATS_KEYWORDS.get(domain, []) if k not in text]
 
+# ================= Role Fit =================
+
 def suggest_roles(domain, exp, pm):
     base = {
         "Telecommunications": ["RAN Engineer", "Wireless Systems Engineer"],
@@ -135,10 +154,13 @@ def suggest_roles(domain, exp, pm):
     }
 
     roles = base.get(domain, []).copy()
+
     if exp == "Experienced":
         roles = [f"Senior {r}" for r in roles]
+
     if pm >= 60:
         roles.append(f"Technical Program Manager ({domain})")
+
     return roles
 
 # ================= UI =================
@@ -160,11 +182,10 @@ if pdf:
         f.write(pdf.getbuffer())
 
     text = extract_text_from_pdf(path)
-    pages = text.count("\f") + 1
 
-    exp = detect_experience_level(text, pages)
+    exp = detect_experience_level(text)
     score = calculate_resume_score(text)
-    domain, conf = detect_domain_with_confidence(text)
+    domain, conf, domain_scores, matched_keys, boosts = detect_domain(text)
     pm_conf = management_confidence(text)
     missing = ats_gap(domain, text)
 
@@ -187,11 +208,22 @@ if pdf:
 
         st.subheader("📊 Resume Strength Score")
         st.progress(score / 100)
+        st.metric("Score", f"{score}%")
 
     # -------- PAGE 2 --------
     elif page == "Career Insights":
         st.subheader("🎯 Primary Technical Domain")
         st.success(f"{domain} ({conf}% confidence)")
+
+        with st.expander("🔍 Why this domain?"):
+            st.write("**Detected Keywords:**", ", ".join(matched_keys[domain]) or "—")
+            if boosts:
+                st.write("**Company Signals:**")
+                for b in boosts:
+                    st.write("•", b)
+            st.write("**Domain Score Comparison:**")
+            for d, s in domain_scores.items():
+                st.write(f"{d}: {s}")
 
         if missing:
             st.subheader("⚠️ ATS Keyword Gaps")
