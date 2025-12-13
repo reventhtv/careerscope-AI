@@ -6,6 +6,7 @@ import base64
 import csv
 import datetime
 import pdfplumber
+from PIL import Image
 
 from streamlit_tags import st_tags
 from Courses import (
@@ -37,14 +38,19 @@ def extract_text_from_pdf(path):
             text += page.extract_text() or ""
     return text
 
-def show_pdf(path):
-    with open(path, "rb") as f:
-        b64 = base64.b64encode(f.read()).decode()
-    st.markdown(
-        f'<iframe src="data:application/pdf;base64,{b64}" '
-        f'width="700" height="900"></iframe>',
-        unsafe_allow_html=True
-    )
+def render_pdf_preview(path):
+    """
+    Streamlit-safe PDF preview:
+    - Renders first page as image
+    - Falls back gracefully
+    """
+    try:
+        with pdfplumber.open(path) as pdf:
+            first_page = pdf.pages[0]
+            image = first_page.to_image(resolution=150).original
+            st.image(image, caption="Resume Preview (Page 1)", use_column_width=True)
+    except Exception:
+        st.info("Preview not available. Please use the download option below.")
 
 def course_recommender(course_list):
     st.subheader("📚 Course Recommendations")
@@ -157,7 +163,17 @@ if choice == "User":
         with open(save_path, "wb") as f:
             f.write(pdf_file.getbuffer())
 
-        show_pdf(save_path)
+        # ✅ FIXED PREVIEW
+        render_pdf_preview(save_path)
+
+        # Download button (always works)
+        with open(save_path, "rb") as f:
+            st.download_button(
+                "⬇️ Download Resume (PDF)",
+                f,
+                file_name=pdf_file.name,
+                mime="application/pdf"
+            )
 
         try:
             resume_text = extract_text_from_pdf(save_path)
@@ -188,11 +204,9 @@ if choice == "User":
         st.write("**Phone:**", phone.group(0) if phone else "")
         st.write("**Pages:**", pages)
 
-        # Experience
         st.subheader("🧭 Experience Level")
         st.info(detect_experience_level(resume_text, pages))
 
-        # Score
         st.subheader("📊 Resume Score")
         score, tips = calculate_resume_score(resume_text)
         st.progress(score / 100)
@@ -200,33 +214,28 @@ if choice == "User":
         for t in tips:
             st.write("•", t)
 
-        # Domain
         domain, domain_courses = detect_domain(skills, resume_text)
         st.subheader("🎯 Best-fit Domain")
         st.success(domain)
 
-        # Skills
         st.subheader("Detected Skills")
         st_tags(label="Skills", value=skills, key="skills")
 
-        # Courses
         if domain_courses:
             course_recommender(domain_courses)
 
-        # AI Suggestions
         st.markdown("---")
         st.subheader("🤖 AI Resume Suggestions")
         if st.button("Get AI Suggestions"):
             with st.spinner("Analyzing with Gemini…"):
                 st.write(ask_ai(resume_text))
 
-        # Videos
         st.subheader("🎥 Resume Tips")
         st.video(random.choice(resume_videos))
+
         st.subheader("🎥 Interview Tips")
         st.video(random.choice(interview_videos))
 
-        # ================= FEEDBACK FORM =================
         st.markdown("---")
         st.subheader("⭐ Share your feedback")
 
@@ -235,7 +244,6 @@ if choice == "User":
             rating = st.slider("Rating", 1, 5, 4)
             comment = st.text_area("Comments")
             submitted = st.form_submit_button("Submit Feedback")
-
             if submitted:
                 save_feedback(name, rating, comment)
                 st.success("Thank you! Your feedback was saved 🙌")
@@ -246,11 +254,12 @@ else:
     st.markdown("""
     ### About AI Resume Analyzer
 
-    - Resume parsing & scoring  
-    - Experience level detection  
-    - Domain classification (including Embedded & Telecom)  
-    - AI-powered suggestions using **Google Gemini**  
-    - Feedback captured without databases  
+    - Resume preview (cloud-safe)
+    - Experience level detection
+    - Resume scoring
+    - Domain classification (incl. Embedded & Telecom)
+    - AI-powered suggestions
+    - Feedback without databases
 
     Built with ❤️ using Streamlit.
     """)
