@@ -51,9 +51,9 @@ def detect_experience_level(text):
         return "Intermediate"
     return "Fresher"
 
-# ================= Resume Score =================
+# ================= Resume Structure Score =================
 
-def calculate_resume_score(text):
+def calculate_structure_score(text):
     score = 0
     sections = [
         "summary", "education", "experience", "skills",
@@ -64,9 +64,9 @@ def calculate_resume_score(text):
             score += 12
     return min(score, 100)
 
-# ================= Domain Detection =================
+# ================= Domain Detection + Expertise =================
 
-def detect_domain(text):
+def detect_domain_and_expertise(text):
     scores = {
         "Telecommunications": 0,
         "Embedded Systems": 0,
@@ -93,32 +93,32 @@ def detect_domain(text):
         "Cybersecurity": ["security"]
     }
 
-    matched_keywords = {d: [] for d in scores}
+    matched = {d: [] for d in scores}
 
     for domain, keys in strong.items():
         for k in keys:
             if k in text:
                 scores[domain] += 3
-                matched_keywords[domain].append(k)
+                matched[domain].append(k)
 
     for domain, keys in weak.items():
         for k in keys:
             if k in text:
                 scores[domain] += 1
-                matched_keywords[domain].append(k)
+                matched[domain].append(k)
 
     company_boosts = []
     if "ericsson" in text:
         scores["Telecommunications"] += 6
-        company_boosts.append("Ericsson → Telecommunications (+6)")
+        company_boosts.append("Ericsson → Telecommunications")
     if "verisure" in text:
         scores["Embedded Systems"] += 5
-        company_boosts.append("Verisure → Embedded Systems (+5)")
+        company_boosts.append("Verisure → Embedded Systems")
 
     best = max(scores, key=scores.get)
-    confidence = int((scores[best] / (sum(scores.values()) or 1)) * 100)
+    expertise_score = min(int((scores[best] / (sum(scores.values()) or 1)) * 100), 100)
 
-    return best, confidence, scores, matched_keywords, company_boosts
+    return best, expertise_score, scores, matched, company_boosts
 
 # ================= Management =================
 
@@ -184,8 +184,8 @@ if pdf:
     text = extract_text_from_pdf(path)
 
     exp = detect_experience_level(text)
-    score = calculate_resume_score(text)
-    domain, conf, domain_scores, matched_keys, boosts = detect_domain(text)
+    structure_score = calculate_structure_score(text)
+    domain, expertise_score, domain_scores, matched_keys, boosts = detect_domain_and_expertise(text)
     pm_conf = management_confidence(text)
     missing = ats_gap(domain, text)
 
@@ -206,14 +206,18 @@ if pdf:
         st.subheader("🧭 Experience Level")
         st.info(exp)
 
-        st.subheader("📊 Resume Strength Score")
-        st.progress(score / 100)
-        st.metric("Score", f"{score}%")
+        st.subheader("📊 Resume Structure Score (ATS Readiness)")
+        st.progress(structure_score / 100)
+        st.metric("Score", f"{structure_score}%")
 
     # -------- PAGE 2 --------
     elif page == "Career Insights":
         st.subheader("🎯 Primary Technical Domain")
-        st.success(f"{domain} ({conf}% confidence)")
+        st.success(f"{domain}")
+
+        st.subheader("🧠 Domain Expertise Score")
+        st.progress(expertise_score / 100)
+        st.metric("Expertise", f"{expertise_score}%")
 
         with st.expander("🔍 Why this domain?"):
             st.write("**Detected Keywords:**", ", ".join(matched_keys[domain]) or "—")
