@@ -9,7 +9,9 @@ geocoder
 plotly>=5.10.0
 geopy>=2.2.0
 pyresparser==1.0.6
+streamlit-tags
 ## pdfminer.six>=20201018
 ## spacy==2.3.5
 ## nltk==3.7
+
 
