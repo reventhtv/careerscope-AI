@@ -54,6 +54,38 @@ def course_recommender(course_list):
     for i, (name, link) in enumerate(course_list[:k], 1):
         st.markdown(f"{i}. [{name}]({link})")
 
+# ================= FEATURE 1: EXPERIENCE LEVEL =================
+
+def detect_experience_level(resume_text: str, pages: int | None = None) -> str:
+    if not resume_text:
+        return "Unknown"
+
+    text = resume_text.lower()
+
+    experienced_keywords = [
+        "work experience", "professional experience",
+        "experience", "senior", "lead", "manager", "architect"
+    ]
+
+    intermediate_keywords = [
+        "internship", "intern", "trainee", "apprentice"
+    ]
+
+    for kw in experienced_keywords:
+        if kw in text:
+            return "Experienced"
+
+    for kw in intermediate_keywords:
+        if kw in text:
+            return "Intermediate"
+
+    if pages and pages >= 2:
+        return "Intermediate"
+
+    return "Fresher"
+
+# ===============================================================
+
 # ---------- UI ----------
 
 st.title("AI-Powered Resume Analyzer")
@@ -89,7 +121,7 @@ if choice == "User":
         st.session_state["resume_text"] = resume_text
         globals()["resume_text"] = resume_text
 
-        # ---------- Parse resume (fallback safe) ----------
+        # ---------- Parse resume (safe) ----------
         resume_data = {}
 
         try:
@@ -129,6 +161,23 @@ if choice == "User":
         st.write("**Email:**", resume_data.get("email", ""))
         st.write("**Phone:**", resume_data.get("mobile_number", ""))
         st.write("**Pages:**", resume_data.get("no_of_pages", 1))
+
+        # ===== Experience Level Display =====
+        experience_level = detect_experience_level(
+            resume_text,
+            pages=resume_data.get("no_of_pages", 1)
+        )
+
+        st.subheader("🧭 Experience Level")
+        if experience_level == "Experienced":
+            st.success("🟢 Experienced")
+        elif experience_level == "Intermediate":
+            st.info("🟡 Intermediate")
+        elif experience_level == "Fresher":
+            st.warning("🔵 Fresher")
+        else:
+            st.write("Experience level could not be determined.")
+        # ===================================
 
         st.subheader("Detected Skills")
         st_tags(
@@ -184,6 +233,7 @@ else:
 
     - Upload a resume
     - Extract skills & information
+    - Detect experience level
     - Get AI-powered feedback using **Google Gemini**
     - Designed for learning, demos & portfolios
 
