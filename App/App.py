@@ -15,8 +15,8 @@ from Courses import (
 
 # ---------- Page config ----------
 st.set_page_config(
-    page_title="AI Resume Analyzer",
-    page_icon="📄",
+    page_title="CareerScope AI",
+    page_icon="🎯",
     layout="wide"
 )
 
@@ -127,31 +127,24 @@ ATS_KEYWORDS = {
 def ats_gap(domain, text):
     return [k for k in ATS_KEYWORDS.get(domain, []) if k not in text]
 
-# ================= Role Fit (NEW v1.8) =================
+# ================= Role Fit =================
 
-def suggest_roles(domain, exp_level, pm_conf, text):
+def suggest_roles(domain, exp_level, pm_conf):
     roles = []
 
     if domain == "Telecommunications":
-        roles.append("RAN Engineer")
-        roles.append("Wireless Systems Engineer")
+        roles += ["RAN Engineer", "Wireless Systems Engineer"]
         if exp_level == "Experienced":
             roles.append("Senior Telecom Engineer")
 
     if domain == "Embedded Systems":
-        roles.append("Embedded Systems Engineer")
-        roles.append("Firmware Engineer")
+        roles += ["Embedded Systems Engineer", "Firmware Engineer"]
         if exp_level == "Experienced":
             roles.append("Embedded Systems Lead")
 
     if pm_conf >= 60:
-        roles.append("Technical Program Manager")
-        roles.append("Program Manager")
+        roles += ["Technical Program Manager", "Program Manager"]
 
-    if domain in ["Telecommunications", "Embedded Systems"] and pm_conf >= 60:
-        roles.append("Technical Program Manager (Domain-specific)")
-
-    # Remove duplicates
     return list(dict.fromkeys(roles))
 
 # ================= Feedback =================
@@ -168,11 +161,18 @@ def save_feedback(name, rating, comment):
 
 # ================= UI =================
 
-st.title("AI-Powered Resume Analyzer")
-choice = st.sidebar.selectbox("Choose section", ["User", "About"])
+st.title("🎯 CareerScope AI")
+st.caption("Career & Role Intelligence Platform")
 
-if choice == "User":
-    pdf = st.file_uploader("Upload your resume (PDF)", type=["pdf"])
+choice = st.sidebar.selectbox("Navigate", ["Career Analysis", "About"])
+
+# ================= USER =================
+
+if choice == "Career Analysis":
+
+    st.subheader("Upload your resume (PDF)")
+    pdf = st.file_uploader("Upload PDF", type=["pdf"])
+
     if pdf:
         os.makedirs("Uploaded_Resumes", exist_ok=True)
         path = f"Uploaded_Resumes/{pdf.name}"
@@ -189,13 +189,13 @@ if choice == "User":
             "iot","react","django","tensorflow","pmp","capm"
         ] if k in text]
 
-        st.header("Resume Analysis")
+        st.header("Career Insights")
 
         exp = detect_experience_level(text, pages)
         st.subheader("🧭 Experience Level")
         st.info(exp)
 
-        st.subheader("📊 Resume Score")
+        st.subheader("📊 Resume Strength Score")
         st.progress(calculate_resume_score(text) / 100)
 
         domain, conf = detect_domain_with_confidence(text, skills)
@@ -210,41 +210,50 @@ if choice == "User":
 
         pm_conf = management_confidence(text)
         if pm_conf > 0:
-            st.subheader("📌 Program / Project Management Readiness")
+            st.subheader("📌 Management Readiness")
             st.progress(pm_conf / 100)
-            st.metric("PM Confidence", f"{pm_conf}%")
+            st.metric("Program / Project Management Confidence", f"{pm_conf}%")
 
-        st.subheader("🎯 Best-fit Roles (v1.8)")
-        roles = suggest_roles(domain, exp, pm_conf, text)
-        for r in roles:
+        st.subheader("🎯 Best-fit Roles")
+        for r in suggest_roles(domain, exp, pm_conf):
             st.write("•", r)
 
-        st.subheader("🧠 Detected Skills")
-        st_tags(label="Skills", value=skills, key="skills")
+        st.subheader("🧠 Skill Signals")
+        st_tags(label="Detected Skills", value=skills, key="skills")
 
         st.markdown("---")
-        st.subheader("🤖 AI Suggestions")
-        if st.button("Get AI Suggestions"):
+        st.subheader("🤖 AI Career Advisor")
+        if st.button("Get AI Guidance"):
             st.write(ask_ai(text))
 
-        st.subheader("⭐ Feedback")
+        st.subheader("⭐ Share Feedback")
         with st.form("feedback"):
-            name = st.text_input("Name")
+            name = st.text_input("Name (optional)")
             rating = st.slider("Rating", 1, 5, 4)
-            comment = st.text_area("Comment")
+            comment = st.text_area("Comments")
             if st.form_submit_button("Submit"):
                 save_feedback(name, rating, comment)
-                st.success("Thanks for your feedback!")
+                st.success("Thank you for helping improve CareerScope AI 🙌")
+
+# ================= ABOUT =================
 
 else:
     st.markdown("""
-    ### AI Resume Analyzer (v1.8)
+    ## CareerScope AI
 
-    - Role fit suggestions (TPM, RAN Engineer, Embedded Lead)
-    - Domain confidence scoring
-    - ATS keyword gaps
-    - PMP / CAPM detection
-    - Resume preview & scoring
+    **CareerScope AI** is an intelligent career and role-fit advisory platform.
+
+    ### What it does
+    - Identifies your **primary technical domain**
+    - Calculates **confidence scores**
+    - Detects **ATS keyword gaps**
+    - Suggests **best-fit roles**
+    - Recognizes **PMP / CAPM & leadership readiness**
+
+    ### Who it’s for
+    - Engineers (Telecom, Embedded, Software)
+    - Program / Project Managers
+    - Professionals planning their next career move
 
     Built with ❤️ using Streamlit.
     """)
