@@ -1,26 +1,34 @@
-# App/ai_client.py
 """
-Robust Gemini AI client for Streamlit Resume Analyzer.
+ai_client.py
+-----------------
+AI client for CareerScope AI using Google Gemini (google-genai).
 
-Supports:
-- API key auth (AI_API_KEY / GEMINI_API_KEY / GENAI_API_KEY)
-- GCP Service Account JSON via Streamlit secrets (GCP_SA_KEY_JSON)
-- Multiple google-genai SDK call signatures (prevents breaking changes)
+Features:
+- Reads API key from Streamlit secrets or environment variables
+- Gracefully handles model overload (503 UNAVAILABLE)
+- Never crashes Streamlit UI
+- Returns clean, user-facing messages
 """
 
 import os
-import json
-import tempfile
 import traceback
 
-# ---------- helpers ----------
+# -------------------- Helpers --------------------
 
 def _get_secret(key: str):
+    """
+    Try reading from Streamlit secrets first, then environment variables
+    """
     try:
         import streamlit as st
-        return st.secrets.get(key)
+        if key in st.secrets:
+            return st.secrets.get(key)
     except Exception:
-        return os.environ.get(key)
+        pass
+    return os.environ.get(key)
+
+
+# -------------------- Config --------------------
 
 API_KEY = (
     _get_secret("AI_API_KEY")
@@ -29,52 +37,24 @@ API_KEY = (
 )
 
 DEFAULT_MODEL = _get_secret("AI_MODEL") or "gemini-2.5-flash"
-API_PROVIDER = (_get_secret("AI_PROVIDER") or "gemini").lower()
 
-# ---------- Service Account handling ----------
+# -------------------- Gemini Init --------------------
 
-def _init_sa_credentials():
-    try:
-        import streamlit as st
-        sa_json = st.secrets.get("GCP_SA_KEY_JSON")
-    except Exception:
-        sa_json = os.environ.get("GCP_SA_KEY_JSON")
-
-    if not sa_json:
-        return None
-
-    try:
-        if isinstance(sa_json, dict):
-            sa_str = json.dumps(sa_json)
-        else:
-            sa_str = sa_json
-
-        fd, path = tempfile.mkstemp(suffix=".json")
-        with os.fdopen(fd, "w") as f:
-            f.write(sa_str)
-
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = path
-        return path
-    except Exception:
-        return None
-
-_sa_path = _init_sa_credentials()
-
-# ---------- google-genai import ----------
-
-_has_genai = False
 _genai_client = None
+_has_genai = False
 
 try:
-    from google import genai  # type: ignore
+    from google import genai
     _has_genai = True
 except Exception:
     _has_genai = False
 
-def _init_genai_client():
+
+def _init_client():
     global _genai_client
     if not _has_genai:
         return None
+
     try:
         if API_KEY:
             _genai_client = genai.Client(api_key=API_KEY)
@@ -85,85 +65,59 @@ def _init_genai_client():
         _genai_client = None
         return None
 
+
 if _has_genai:
-    _init_genai_client()
+    _init_client()
 
-# ---------- response parsing ----------
 
-def _resp_to_text(resp):
-    if hasattr(resp, "text"):
-        return resp.text
-    if isinstance(resp, dict):
-        if "text" in resp:
-            return resp["text"]
-        if "candidates" in resp and resp["candidates"]:
-            cand = resp["candidates"][0]
-            if isinstance(cand, dict):
-                return cand.get("content") or cand.get("text")
-    return str(resp)
-
-# ---------- Gemini call ----------
+# -------------------- Core Call --------------------
 
 def call_gemini(prompt: str, model: str = None):
+    if not _has_genai or _genai_client is None:
+        raise RuntimeError("Gemini SDK not initialized.")
+
     model = model or DEFAULT_MODEL
 
-    if not _has_genai:
-        raise RuntimeError("google-genai SDK not installed")
+    response = _genai_client.models.generate_content(
+        model=model,
+        contents=prompt
+    )
 
-    if _genai_client is None:
-        _init_genai_client()
+    # Handle different response shapes safely
+    if hasattr(response, "text"):
+        return response.text
 
-    if _genai_client is None:
-        raise RuntimeError("Gemini client not initialized")
+    return str(response)
 
-    # Try multiple SDK signatures (SDK versions differ)
-    try:
-        resp = _genai_client.models.generate_content(
-            model=model,
-            contents=prompt
-        )
-        return _resp_to_text(resp)
-    except TypeError:
-        pass
 
-    try:
-        resp = _genai_client.generate_content(prompt)
-        return _resp_to_text(resp)
-    except Exception:
-        pass
-
-    try:
-        resp = _genai_client.generate_text(
-            model=model,
-            prompt=prompt
-        )
-        return _resp_to_text(resp)
-    except Exception as e:
-        raise RuntimeError(str(e))
-
-# ---------- Public API ----------
+# -------------------- Public API --------------------
 
 def ask_ai(prompt: str):
-    if not prompt:
-        return "No resume text provided."
+    """
+    Safe wrapper used by App.py
+    Always returns a string (never raises)
+    """
+
+    if not prompt or not prompt.strip():
+        return "No input provided for AI analysis."
 
     try:
-        if API_PROVIDER == "gemini" and _has_genai:
-            out = call_gemini(prompt)
-            return out or "No output returned by model."
+        return call_gemini(prompt)
+
     except Exception as e:
-        return (
-            f"AI provider error (Gemini): {e}\n\n"
-            f"{traceback.format_exc()}"
-        )
+        msg = str(e)
 
-    if not API_KEY and not _sa_path:
-        return (
-            "AI suggestions are not enabled.\n\n"
-            "Add either:\n"
-            "- AI_API_KEY (Gemini API key), OR\n"
-            "- GCP_SA_KEY_JSON (service account JSON)\n"
-            "in Streamlit Secrets."
-        )
+        # ---- Gemini overload / rate limit ----
+        if "503" in msg or "UNAVAILABLE" in msg:
+            return (
+                "⚠️ **AI service is temporarily busy**\n\n"
+                "The Gemini model is under heavy load right now.\n"
+                "Please wait **30–60 seconds** and try again.\n\n"
+                "Your analysis and data are safe."
+            )
 
-    return "AI provider not available."
+        # ---- Generic fallback ----
+        return (
+            "⚠️ **AI encountered an unexpected issue**\n\n"
+            f"Details: {msg}"
+        )
