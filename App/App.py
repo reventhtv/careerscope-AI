@@ -26,6 +26,16 @@ except Exception:
     def ask_ai(prompt):
         return "AI service unavailable."
 
+# ===================== SESSION STATE INIT =====================
+if "resume_uploaded" not in st.session_state:
+    st.session_state.resume_uploaded = False
+
+if "resume_text" not in st.session_state:
+    st.session_state.resume_text = ""
+
+if "resume_path" not in st.session_state:
+    st.session_state.resume_path = ""
+
 # ===================== HELPERS =====================
 
 def extract_text_from_pdf(path):
@@ -55,11 +65,9 @@ def course_recommender(course_list):
     for i, (name, link) in enumerate(course_list[:k], 1):
         st.markdown(f"{i}. [{name}]({link})")
 
-
 # ===================== SCORING LOGIC =====================
 
 def calculate_structure_score(resume_text):
-    score = 0
     checks = {
         "email": bool(re.search(r"\S+@\S+\.\S+", resume_text)),
         "phone": bool(re.search(r"\+?\d[\d\s\-]{8,}", resume_text)),
@@ -83,7 +91,6 @@ def experience_level(resume_text):
     else:
         return "Entry-level"
 
-
 # ===================== DOMAIN DETECTION =====================
 
 DOMAINS = {
@@ -94,21 +101,20 @@ DOMAINS = {
 }
 
 def detect_domain(resume_text):
-    scores = {}
+    scores = {d: 0 for d in DOMAINS}
     for domain, keywords in DOMAINS.items():
-        scores[domain] = sum(1 for k in keywords if k in resume_text.lower())
+        for kw in keywords:
+            if kw in resume_text.lower():
+                scores[domain] += 1
     best = max(scores, key=scores.get)
     confidence = int((scores[best] / max(1, sum(scores.values()))) * 100)
     return best, confidence
 
-
-# ===================== UI HEADER =====================
-
+# ===================== HEADER =====================
 st.title("🎯 CareerScope AI")
 st.caption("Career & Role Intelligence Platform")
 
 # ===================== SIDEBAR =====================
-
 page = st.sidebar.radio(
     "Navigate",
     ["Resume Overview", "Career Insights", "Growth & Guidance", "Job Match"]
@@ -117,112 +123,113 @@ page = st.sidebar.radio(
 st.sidebar.markdown("---")
 pdf_file = st.sidebar.file_uploader("Upload Resume (PDF)", type=["pdf"])
 
-resume_uploaded = False
-resume_text = ""
-
 if pdf_file:
     os.makedirs("Uploaded_Resumes", exist_ok=True)
     save_path = f"Uploaded_Resumes/{pdf_file.name}"
+
     with open(save_path, "wb") as f:
         f.write(pdf_file.getbuffer())
-    resume_text = extract_text_from_pdf(save_path)
-    resume_uploaded = True
+
+    st.session_state.resume_text = extract_text_from_pdf(save_path)
+    st.session_state.resume_uploaded = True
+    st.session_state.resume_path = save_path
 
 # ===================== RESUME OVERVIEW =====================
-
 if page == "Resume Overview":
-    if resume_uploaded:
+    if st.session_state.resume_uploaded:
         st.subheader("📄 Resume Preview")
-        show_pdf(save_path)
+        show_pdf(st.session_state.resume_path)
     else:
         st.info("Upload a resume to begin analysis.")
 
 # ===================== CAREER INSIGHTS =====================
-
 if page == "Career Insights":
 
-    if not resume_uploaded:
+    if not st.session_state.resume_uploaded:
         st.warning("Please upload a resume first.")
-    else:
-        st.subheader("📊 Career Insights")
+        st.stop()
 
-        # ---------- ATS SCORE ----------
-        ats_score, ats_checks = calculate_structure_score(resume_text)
-        st.markdown("### 📈 Resume Structure Score (ATS Readiness)")
-        st.progress(ats_score)
-        st.metric("Score", f"{ats_score}%")
+    resume_text = st.session_state.resume_text
 
-        # ---------- RESUME STRENGTH BREAKDOWN (FIXED) ----------
-        st.markdown("### 🧩 Resume Strength Breakdown")
+    st.subheader("📊 Career Insights")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Contact Information", "Present" if ats_checks["email"] and ats_checks["phone"] else "Missing")
-            st.metric("Education Section", "Present" if ats_checks["education"] else "Missing")
-        with col2:
-            st.metric("Experience Section", "Present" if ats_checks["experience"] else "Missing")
-            st.metric("Skills Section", "Present" if ats_checks["skills"] else "Missing")
+    # ATS SCORE
+    ats_score, ats_checks = calculate_structure_score(resume_text)
+    st.markdown("### 📈 Resume Structure Score (ATS Readiness)")
+    st.progress(ats_score)
+    st.metric("Score", f"{ats_score}%")
 
-        st.caption(
-            "This breakdown explains *why* your ATS score is what it is. "
-            "Missing sections directly reduce ATS compatibility."
-        )
+    # ✅ RESUME STRENGTH BREAKDOWN (NOW GUARANTEED)
+    st.markdown("### 🧩 Resume Strength Breakdown")
 
-        # ---------- EXPERIENCE ----------
-        st.markdown("### 🧭 Experience Level")
-        st.info(experience_level(resume_text))
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write("📧 Contact Info:", "✅" if ats_checks["email"] and ats_checks["phone"] else "❌")
+        st.write("🎓 Education Section:", "✅" if ats_checks["education"] else "❌")
+    with col2:
+        st.write("💼 Experience Section:", "✅" if ats_checks["experience"] else "❌")
+        st.write("🛠 Skills Section:", "✅" if ats_checks["skills"] else "❌")
 
-        # ---------- DOMAIN ----------
-        domain, confidence = detect_domain(resume_text)
-        st.markdown("### 🎯 Primary Technical Domain")
-        st.success(f"{domain} ({confidence}% confidence)")
+    st.caption("Explains exactly why your ATS score is what it is.")
+
+    # EXPERIENCE
+    st.markdown("### 🧭 Experience Level")
+    st.info(experience_level(resume_text))
+
+    # DOMAIN
+    domain, confidence = detect_domain(resume_text)
+    st.markdown("### 🎯 Primary Technical Domain")
+    st.success(f"{domain} ({confidence}% confidence)")
 
 # ===================== GROWTH & GUIDANCE =====================
-
 if page == "Growth & Guidance":
-    if not resume_uploaded:
+    if not st.session_state.resume_uploaded:
         st.warning("Upload a resume to get recommendations.")
-    else:
-        course_recommender(ds_course)
-        st.subheader("🎥 Resume Tips")
-        st.video(random.choice(resume_videos))
-        st.subheader("🎥 Interview Tips")
-        st.video(random.choice(interview_videos))
+        st.stop()
+
+    course_recommender(ds_course)
+    st.subheader("🎥 Resume Tips")
+    st.video(random.choice(resume_videos))
+    st.subheader("🎥 Interview Tips")
+    st.video(random.choice(interview_videos))
 
 # ===================== JOB MATCH =====================
-
 if page == "Job Match":
-    if not resume_uploaded:
+    if not st.session_state.resume_uploaded:
         st.warning("Upload a resume to match with a job description.")
-    else:
-        st.subheader("🎯 Job Description Matcher")
-        jd = st.text_area("Paste Job Description")
+        st.stop()
 
-        if st.button("Analyze Job Fit") and jd:
-            resume_words = set(resume_text.lower().split())
-            jd_words = set(jd.lower().split())
+    resume_text = st.session_state.resume_text
 
-            matched = resume_words & jd_words
-            missing = jd_words - resume_words
+    st.subheader("🎯 Job Description Matcher")
+    jd = st.text_area("Paste Job Description")
 
-            score = int((len(matched) / max(1, len(jd_words))) * 100)
+    if st.button("Analyze Job Fit") and jd:
+        resume_words = set(resume_text.lower().split())
+        jd_words = set(jd.lower().split())
 
-            st.metric("Role Fit Score", f"{score}%")
-            st.success("Matched Keywords")
-            st.write(", ".join(list(matched)[:50]))
+        matched = resume_words & jd_words
+        missing = jd_words - resume_words
 
-            st.warning("Missing Keywords")
-            st.write(", ".join(list(missing)[:50]))
+        score = int((len(matched) / max(1, len(jd_words))) * 100)
 
-            st.markdown("### 🤖 AI JD-Specific Resume Improvements")
-            with st.spinner("Generating suggestions..."):
-                prompt = f"""
-                Improve this resume for the following job description.
+        st.metric("Role Fit Score", f"{score}%")
 
-                RESUME:
-                {resume_text}
+        st.success("Matched Keywords")
+        st.write(", ".join(list(matched)[:50]))
 
-                JOB DESCRIPTION:
-                {jd}
-                """
-                st.write(ask_ai(prompt))
+        st.warning("Missing Keywords")
+        st.write(", ".join(list(missing)[:50]))
+
+        st.markdown("### 🤖 AI JD-Specific Resume Improvements")
+        with st.spinner("Generating suggestions..."):
+            prompt = f"""
+            Improve this resume for the following job description.
+
+            RESUME:
+            {resume_text}
+
+            JOB DESCRIPTION:
+            {jd}
+            """
+            st.write(ask_ai(prompt))
