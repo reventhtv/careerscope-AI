@@ -1,10 +1,8 @@
 import streamlit as st
 import os
-import io
 import re
 import random
 import base64
-import time
 import pdfplumber
 
 from streamlit_tags import st_tags
@@ -14,39 +12,22 @@ from Courses import (
     resume_videos, interview_videos
 )
 
-# ==============================
-# Page Configuration
-# ==============================
+# ===================== PAGE CONFIG =====================
 st.set_page_config(
     page_title="CareerScope AI",
-    page_icon="📊",
+    page_icon="🎯",
     layout="wide"
 )
 
-st.title("CareerScope AI")
-st.caption("Understand your resume. Understand your career.")
-
-# ==============================
-# Sidebar
-# ==============================
-st.sidebar.header("Navigation")
-page = st.sidebar.radio(
-    "Go to",
-    ["Resume Analyzer", "About"]
-)
-
-# ==============================
-# AI Client
-# ==============================
+# ===================== AI CLIENT =====================
 try:
     from ai_client import ask_ai
 except Exception:
-    def ask_ai(prompt: str):
-        return "AI service not configured."
+    def ask_ai(prompt):
+        return "AI service unavailable."
 
-# ==============================
-# Helper Functions
-# ==============================
+# ===================== HELPERS =====================
+
 def extract_text_from_pdf(path):
     text = ""
     with pdfplumber.open(path) as pdf:
@@ -54,182 +35,194 @@ def extract_text_from_pdf(path):
             text += page.extract_text() or ""
     return text
 
+
 def show_pdf(path):
     with open(path, "rb") as f:
         b64 = base64.b64encode(f.read()).decode()
     st.markdown(
         f"""
-        <iframe
-            src="data:application/pdf;base64,{b64}"
-            width="100%"
-            height="900"
-            style="border:none;"
-        ></iframe>
+        <iframe src="data:application/pdf;base64,{b64}"
+        width="100%" height="900"></iframe>
         """,
         unsafe_allow_html=True
     )
 
+
 def course_recommender(course_list):
-    st.subheader("📚 Recommended Learning")
-    k = st.slider("Number of courses", 1, 8, 5)
+    st.subheader("📚 Course Recommendations")
+    k = st.slider("Number of recommendations", 1, 10, 5)
     random.shuffle(course_list)
     for i, (name, link) in enumerate(course_list[:k], 1):
         st.markdown(f"{i}. [{name}]({link})")
 
-# ==============================
-# MAIN PAGE
-# ==============================
-if page == "Resume Analyzer":
 
-    st.subheader("📄 Upload your resume (PDF)")
-    pdf_file = st.file_uploader("Choose a PDF file", type=["pdf"])
+# ===================== SCORING LOGIC =====================
 
-    if pdf_file:
-        os.makedirs("Uploaded_Resumes", exist_ok=True)
-        file_path = f"Uploaded_Resumes/{pdf_file.name}"
+def calculate_structure_score(resume_text):
+    score = 0
+    checks = {
+        "email": bool(re.search(r"\S+@\S+\.\S+", resume_text)),
+        "phone": bool(re.search(r"\+?\d[\d\s\-]{8,}", resume_text)),
+        "education": "education" in resume_text.lower(),
+        "experience": "experience" in resume_text.lower(),
+        "skills": "skills" in resume_text.lower(),
+    }
+    score = int((sum(checks.values()) / len(checks)) * 100)
+    return score, checks
 
-        with open(file_path, "wb") as f:
-            f.write(pdf_file.getbuffer())
 
-        # ---------- Resume Preview ----------
-        st.markdown("### 📑 Resume Preview")
-        show_pdf(file_path)
+def experience_level(resume_text):
+    years = re.findall(r"\b(\d+)\+?\s+years?\b", resume_text.lower())
+    years = [int(y) for y in years] if years else []
+    max_years = max(years) if years else 0
 
-        # ---------- Text Extraction ----------
-        resume_text = ""
-        try:
-            resume_text = extract_text_from_pdf(file_path)
-        except Exception:
-            st.error("Could not extract text from resume.")
+    if max_years >= 8:
+        return "Experienced"
+    elif max_years >= 3:
+        return "Mid-level"
+    else:
+        return "Entry-level"
 
-        resume_text_lower = resume_text.lower()
 
-        # ---------- Basic Parsing ----------
-        email = re.search(r"\S+@\S+\.\S+", resume_text)
-        phone = re.search(r"\+?\d[\d\s\-]{8,}", resume_text)
+# ===================== DOMAIN DETECTION =====================
 
-        skills_db = [
-            "python","c","c++","embedded","rtos","linux",
-            "lte","5g","ran","telecom","iot",
-            "aws","azure","gcp","docker","kubernetes",
-            "devops","ci/cd","terraform",
-            "pmp","capm","scrum","agile",
-            "machine learning","data science","sql"
-        ]
+DOMAINS = {
+    "Telecommunications": ["lte", "5g", "ran", "telecom", "ericsson", "verisure"],
+    "Embedded Systems": ["embedded", "firmware", "rtos", "cortex", "microcontroller"],
+    "DevOps / Platform": ["docker", "kubernetes", "ci/cd", "terraform", "cloud"],
+    "Data Science": ["machine learning", "tensorflow", "pytorch", "data science"],
+}
 
-        skills_found = sorted({
-            skill for skill in skills_db
-            if skill in resume_text_lower
-        })
+def detect_domain(resume_text):
+    scores = {}
+    for domain, keywords in DOMAINS.items():
+        scores[domain] = sum(1 for k in keywords if k in resume_text.lower())
+    best = max(scores, key=scores.get)
+    confidence = int((scores[best] / max(1, sum(scores.values()))) * 100)
+    return best, confidence
 
-        pages = resume_text.count("\f") + 1 if resume_text else 1
 
-        # ---------- Resume Strength Breakdown ----------
-        st.markdown("## 🧠 Resume Strength Breakdown")
+# ===================== UI HEADER =====================
 
-        checks = {
-            "Summary / Objective": any(x in resume_text_lower for x in ["summary", "objective"]),
-            "Experience Section": "experience" in resume_text_lower,
-            "Projects Section": "project" in resume_text_lower,
-            "Skills Section": "skill" in resume_text_lower,
-            "Certifications": any(x in resume_text_lower for x in ["certification", "pmp", "capm"]),
-            "Education": "education" in resume_text_lower,
-            "Quantified Impact": bool(re.search(r"\d+%", resume_text))
-        }
+st.title("🎯 CareerScope AI")
+st.caption("Career & Role Intelligence Platform")
 
-        for item, passed in checks.items():
-            if passed:
-                st.success(f"✔ {item}")
-            else:
-                st.warning(f"✖ {item}")
+# ===================== SIDEBAR =====================
 
-        # ---------- Resume Score ----------
-        structure_score = int((sum(checks.values()) / len(checks)) * 100)
-        expertise_score = min(100, len(skills_found) * 8)
-        overall_score = int((structure_score * 0.6) + (expertise_score * 0.4))
+page = st.sidebar.radio(
+    "Navigate",
+    ["Resume Overview", "Career Insights", "Growth & Guidance", "Job Match"]
+)
 
-        st.markdown("## 📊 Resume Scores")
-        col1, col2, col3 = st.columns(3)
+st.sidebar.markdown("---")
+pdf_file = st.sidebar.file_uploader("Upload Resume (PDF)", type=["pdf"])
 
-        col1.metric("Structure Score", f"{structure_score}%")
-        col2.metric("Expertise Score", f"{expertise_score}%")
-        col3.metric("Overall Strength", f"{overall_score}%")
+resume_uploaded = False
+resume_text = ""
 
-        # ---------- Experience Level ----------
-        st.markdown("## 🧑‍💼 Experience Level")
-        if pages >= 2 or "experience" in resume_text_lower:
-            st.info("Experienced Professional")
-        else:
-            st.info("Early Career / Fresher")
+if pdf_file:
+    os.makedirs("Uploaded_Resumes", exist_ok=True)
+    save_path = f"Uploaded_Resumes/{pdf_file.name}"
+    with open(save_path, "wb") as f:
+        f.write(pdf_file.getbuffer())
+    resume_text = extract_text_from_pdf(save_path)
+    resume_uploaded = True
 
-        # ---------- Skills ----------
-        st.markdown("## 🧩 Detected Skills")
-        st_tags(label="Skills", value=skills_found, key="skills")
+# ===================== RESUME OVERVIEW =====================
 
-        # ---------- Domain Detection ----------
-        st.markdown("## 🎯 Best-fit Domain")
+if page == "Resume Overview":
+    if resume_uploaded:
+        st.subheader("📄 Resume Preview")
+        show_pdf(save_path)
+    else:
+        st.info("Upload a resume to begin analysis.")
 
-        domain = "General Engineering"
-        if any(x in resume_text_lower for x in ["lte", "ran", "telecom", "5g", "embedded"]):
-            domain = "Telecommunications & Embedded Systems"
-        elif any(x in resume_text_lower for x in ["aws", "docker", "kubernetes", "devops"]):
-            domain = "Cloud & DevOps"
-        elif any(x in resume_text_lower for x in ["data science", "machine learning"]):
-            domain = "Data Science & AI"
-        elif any(x in resume_text_lower for x in ["pmp", "capm"]):
-            domain = "Technical Program Management"
+# ===================== CAREER INSIGHTS =====================
 
-        st.success(domain)
+if page == "Career Insights":
 
-        # ---------- Learning Suggestions ----------
-        if domain.startswith("Telecom"):
-            course_recommender(android_course)
-        elif domain.startswith("Cloud"):
-            course_recommender(web_course)
-        elif domain.startswith("Data"):
-            course_recommender(ds_course)
+    if not resume_uploaded:
+        st.warning("Please upload a resume first.")
+    else:
+        st.subheader("📊 Career Insights")
 
-        # ---------- AI Suggestions ----------
-        st.markdown("## 🤖 AI Career Insights")
+        # ---------- ATS SCORE ----------
+        ats_score, ats_checks = calculate_structure_score(resume_text)
+        st.markdown("### 📈 Resume Structure Score (ATS Readiness)")
+        st.progress(ats_score)
+        st.metric("Score", f"{ats_score}%")
 
-        if st.button("Generate AI Suggestions"):
-            with st.spinner("Analyzing your profile..."):
-                prompt = f"""
-You are a senior career advisor.
+        # ---------- RESUME STRENGTH BREAKDOWN (FIXED) ----------
+        st.markdown("### 🧩 Resume Strength Breakdown")
 
-Analyze the following resume and provide:
-1. Key strengths
-2. Gaps or weaknesses
-3. Career role recommendations
-4. One improvement tip
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Contact Information", "Present" if ats_checks["email"] and ats_checks["phone"] else "Missing")
+            st.metric("Education Section", "Present" if ats_checks["education"] else "Missing")
+        with col2:
+            st.metric("Experience Section", "Present" if ats_checks["experience"] else "Missing")
+            st.metric("Skills Section", "Present" if ats_checks["skills"] else "Missing")
 
-Resume:
-{resume_text}
-"""
-                response = ask_ai(prompt)
-                st.write(response)
+        st.caption(
+            "This breakdown explains *why* your ATS score is what it is. "
+            "Missing sections directly reduce ATS compatibility."
+        )
 
-        # ---------- Videos ----------
-        st.markdown("## 🎥 Career Tips")
+        # ---------- EXPERIENCE ----------
+        st.markdown("### 🧭 Experience Level")
+        st.info(experience_level(resume_text))
+
+        # ---------- DOMAIN ----------
+        domain, confidence = detect_domain(resume_text)
+        st.markdown("### 🎯 Primary Technical Domain")
+        st.success(f"{domain} ({confidence}% confidence)")
+
+# ===================== GROWTH & GUIDANCE =====================
+
+if page == "Growth & Guidance":
+    if not resume_uploaded:
+        st.warning("Upload a resume to get recommendations.")
+    else:
+        course_recommender(ds_course)
+        st.subheader("🎥 Resume Tips")
         st.video(random.choice(resume_videos))
+        st.subheader("🎥 Interview Tips")
         st.video(random.choice(interview_videos))
 
-# ==============================
-# ABOUT PAGE
-# ==============================
-else:
-    st.markdown("""
-### About CareerScope AI
+# ===================== JOB MATCH =====================
 
-CareerScope AI helps professionals understand their resumes beyond keywords.
+if page == "Job Match":
+    if not resume_uploaded:
+        st.warning("Upload a resume to match with a job description.")
+    else:
+        st.subheader("🎯 Job Description Matcher")
+        jd = st.text_area("Paste Job Description")
 
-**What it does**
-- Resume structure & expertise scoring
-- Domain and role-fit analysis
-- Explainable insights (no black box)
-- AI-powered career suggestions
+        if st.button("Analyze Job Fit") and jd:
+            resume_words = set(resume_text.lower().split())
+            jd_words = set(jd.lower().split())
 
-Built for engineers, program managers, and technical leaders.
+            matched = resume_words & jd_words
+            missing = jd_words - resume_words
 
-Soft-launched. Feedback welcome.
-""")
+            score = int((len(matched) / max(1, len(jd_words))) * 100)
+
+            st.metric("Role Fit Score", f"{score}%")
+            st.success("Matched Keywords")
+            st.write(", ".join(list(matched)[:50]))
+
+            st.warning("Missing Keywords")
+            st.write(", ".join(list(missing)[:50]))
+
+            st.markdown("### 🤖 AI JD-Specific Resume Improvements")
+            with st.spinner("Generating suggestions..."):
+                prompt = f"""
+                Improve this resume for the following job description.
+
+                RESUME:
+                {resume_text}
+
+                JOB DESCRIPTION:
+                {jd}
+                """
+                st.write(ask_ai(prompt))
