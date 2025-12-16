@@ -1,31 +1,75 @@
 import streamlit as st
 import os
+import io
 import re
-import base64
 import random
+import base64
 import pdfplumber
-from streamlit_tags import st_tags
-from Courses import (
-    ds_course, web_course, android_course,
-    ios_course, uiux_course,
-    resume_videos, interview_videos
-)
+from PIL import Image
 
-# ================= Page Config =================
+# ---------- Page Config ----------
 st.set_page_config(
     page_title="CareerScope AI",
     page_icon="🎯",
     layout="wide"
 )
 
-# ================= AI Client =================
+# ---------- AI Client ----------
 try:
     from ai_client import ask_ai
 except Exception:
-    def ask_ai(prompt):
+    def ask_ai(prompt: str):
         return "AI service temporarily unavailable."
 
-# ================= Helpers =================
+# ---------- Courses ----------
+from Courses import (
+    ds_course, web_course, android_course,
+    ios_course, uiux_course,
+    resume_videos, interview_videos
+)
+
+# ---------- Sidebar ----------
+st.sidebar.title("Navigate")
+
+section = st.sidebar.radio(
+    "",
+    ["Resume Overview", "Career Insights", "Growth & Guidance", "Job Match"]
+)
+
+st.sidebar.markdown("### Upload Resume (PDF)")
+pdf_file = st.sidebar.file_uploader(
+    "Drag and drop file here",
+    type=["pdf"]
+)
+
+# ---------- Buy Me a Coffee (STABLE) ----------
+st.sidebar.markdown("---")
+st.sidebar.markdown(
+    """
+    <div style="text-align:center; margin-top:20px;">
+        <p style="font-size:14px; color:#bbb;">
+            Enjoying CareerScope AI?
+        </p>
+        <a href="https://www.buymeacoffee.com/revanththiruvallur"
+           target="_blank"
+           style="
+             display:inline-block;
+             padding:8px 16px;
+             background-color:#ffdd00;
+             color:#000;
+             font-weight:600;
+             border-radius:8px;
+             text-decoration:none;
+             font-size:14px;
+           ">
+           ☕ Buy me a coffee
+        </a>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# ---------- Helpers ----------
 def extract_text_from_pdf(path):
     text = ""
     with pdfplumber.open(path) as pdf:
@@ -37,114 +81,133 @@ def show_pdf(path):
     with open(path, "rb") as f:
         b64 = base64.b64encode(f.read()).decode()
     st.markdown(
-        f"<iframe src='data:application/pdf;base64,{b64}' width='100%' height='800'></iframe>",
+        f"""
+        <iframe src="data:application/pdf;base64,{b64}"
+                width="100%" height="900"
+                style="border:none;"></iframe>
+        """,
         unsafe_allow_html=True
     )
 
-def normalize(text):
-    return text.lower() if text else ""
+def keyword_score(text, keywords):
+    return sum(1 for k in keywords if k in text.lower())
 
-# ================= App Header =================
-st.title("🎯 CareerScope AI")
-st.caption("Career & Role Intelligence Platform")
-
-# ================= Sidebar =================
-page = st.sidebar.radio(
-    "Navigate",
-    ["Resume Overview", "Career Insights", "Growth & Guidance", "Job Match"]
-)
-
-st.sidebar.markdown("---")
-pdf_file = st.sidebar.file_uploader("Upload Resume (PDF)", type=["pdf"])
+# ---------- Save & Parse Resume ----------
+resume_text = ""
+resume_data = {}
 
 if pdf_file:
     os.makedirs("Uploaded_Resumes", exist_ok=True)
-    path = f"Uploaded_Resumes/{pdf_file.name}"
-    with open(path, "wb") as f:
+    file_path = f"Uploaded_Resumes/{pdf_file.name}"
+
+    with open(file_path, "wb") as f:
         f.write(pdf_file.getbuffer())
 
-    resume_text = extract_text_from_pdf(path)
+    resume_text = extract_text_from_pdf(file_path)
     st.session_state["resume_text"] = resume_text
-    st.session_state["resume_uploaded"] = True
 
-# ======================================================
-# ================= RESUME OVERVIEW ====================
-# ======================================================
-if page == "Resume Overview":
+    try:
+        from pyresparser import ResumeParser
+        parsed = ResumeParser(file_path).get_extracted_data()
+        if parsed:
+            resume_data = parsed
+    except Exception:
+        resume_data = {}
 
-    if not st.session_state.get("resume_uploaded"):
+    if not resume_data:
+        email = re.search(r"\S+@\S+\.\S+", resume_text)
+        phone = re.search(r"\+?\d[\d\s\-]{8,}", resume_text)
+        resume_data = {
+            "email": email.group(0) if email else "",
+            "mobile_number": phone.group(0) if phone else "",
+            "skills": [],
+            "no_of_pages": resume_text.count("\f") + 1
+        }
+
+# ================= HEADER =================
+st.markdown(
+    """
+    <h1>🎯 CareerScope AI</h1>
+    <p style="color:#aaa;">
+    Career & Role Intelligence Platform
+    </p>
+    """,
+    unsafe_allow_html=True
+)
+
+# ================= Resume Overview =================
+if section == "Resume Overview":
+
+    if not pdf_file:
         st.info("Upload a resume to begin.")
     else:
         st.subheader("📄 Resume Preview")
-        show_pdf(path)
+        show_pdf(file_path)
 
-        text = normalize(st.session_state["resume_text"])
-
-        structure_score = min(100, len(re.findall(r"\n", text)) * 2)
         st.subheader("📊 Resume Structure Score (ATS Readiness)")
+        structure_score = min(100, 40 + resume_text.lower().count("experience") * 5)
         st.progress(structure_score / 100)
-        st.write(f"Score: **{structure_score}%**")
+        st.write(f"**Score:** {structure_score}%")
 
-# ======================================================
-# ================= CAREER INSIGHTS ===================
-# ======================================================
-elif page == "Career Insights":
+# ================= Career Insights =================
+elif section == "Career Insights":
 
-    if not st.session_state.get("resume_uploaded"):
-        st.info("Upload a resume to view insights.")
+    if not resume_text:
+        st.info("Upload a resume to see insights.")
     else:
-        text = normalize(st.session_state["resume_text"])
-
-        # Experience Level
-        if any(k in text for k in ["lead", "manager", "architect", "principal"]):
-            experience = "Experienced"
-        elif "intern" in text:
-            experience = "Entry / Intermediate"
-        else:
-            experience = "Mid-level"
-
         st.subheader("🧠 Experience Level")
-        st.success(experience)
 
-        # Domain Detection
-        domains = {
-            "Telecommunications": ["ran", "lte", "5g", "telecom", "ericsson"],
-            "Embedded Systems": ["embedded", "rtos", "firmware"],
-            "Cloud / DevOps": ["aws", "docker", "kubernetes", "terraform"],
-            "FinTech": ["fintech", "payments", "banking"],
-            "Cybersecurity": ["security", "siem", "soc"],
-            "Program Management": ["pmp", "capm", "roadmap", "stakeholder"]
-        }
+        if resume_text.lower().count("year") >= 5:
+            exp_level = "Experienced"
+        elif resume_text.lower().count("intern") > 0:
+            exp_level = "Intermediate"
+        else:
+            exp_level = "Fresher"
 
-        domain_scores = {d: sum(1 for k in v if k in text) for d, v in domains.items()}
-        primary_domain = max(domain_scores, key=domain_scores.get)
+        st.success(exp_level)
 
         st.subheader("🎯 Primary Domain")
-        st.success(primary_domain)
 
-        # Expertise Score
-        expertise_score = min(100, domain_scores[primary_domain] * 20)
+        domain_keywords = {
+            "Telecommunications": ["5g", "ran", "lte", "telecom", "wireless"],
+            "Embedded Systems": ["embedded", "rtos", "firmware", "cortex", "c"],
+            "Cloud / DevOps": ["aws", "azure", "gcp", "docker", "kubernetes", "ci/cd"],
+            "FinTech": ["payments", "banking", "fintech", "pci", "ledger"],
+            "Program Management": ["pmp", "capm", "stakeholder", "roadmap", "delivery"]
+        }
+
+        domain_scores = {
+            d: keyword_score(resume_text, k)
+            for d, k in domain_keywords.items()
+        }
+
+        primary_domain = max(domain_scores, key=domain_scores.get)
+        confidence = min(100, domain_scores[primary_domain] * 10)
+
+        st.success(f"{primary_domain} ({confidence}% confidence)")
+
         st.subheader("🧠 Domain Expertise Score")
+        expertise_score = min(100, domain_scores[primary_domain] * 10)
         st.progress(expertise_score / 100)
-        st.write(f"Expertise: **{expertise_score}%**")
+        st.write(f"**Expertise:** {expertise_score}%")
 
-        # Management Readiness
-        pm_confidence = 100 if any(k in text for k in ["pmp", "capm"]) else 60
-        st.subheader("📌 Management Readiness")
-        st.progress(pm_confidence / 100)
-        st.write(f"PM Confidence: **{pm_confidence}%**")
+# ================= Growth & Guidance =================
+elif section == "Growth & Guidance":
 
-# ======================================================
-# ================= GROWTH & GUIDANCE ==================
-# ======================================================
-elif page == "Growth & Guidance":
-
-    if not st.session_state.get("resume_uploaded"):
-        st.info("Upload a resume to view guidance.")
+    if not resume_text:
+        st.info("Upload a resume to continue.")
     else:
-        st.subheader("📚 Course Recommendations")
-        for i, (name, link) in enumerate(web_course[:5], 1):
-            st.markdown(f"{i}. [{name}]({link})")
+        st.subheader("📌 ATS Keyword Gaps")
+
+        ats_keywords = ["aws", "docker", "kubernetes", "observability", "metrics"]
+        missing = [k for k in ats_keywords if k not in resume_text.lower()]
+
+        if missing:
+            st.warning("Missing Keywords:")
+            for k in missing:
+                st.write(f"- {k}")
+        else:
+            st.success("Strong ATS alignment")
 
         st.subheader("🎥 Resume Tips")
         st.video(random.choice(resume_videos))
@@ -152,88 +215,44 @@ elif page == "Growth & Guidance":
         st.subheader("🎥 Interview Tips")
         st.video(random.choice(interview_videos))
 
-# ======================================================
-# ================= JOB MATCH ==========================
-# ======================================================
-elif page == "Job Match":
+# ================= Job Match =================
+elif section == "Job Match":
 
-    if not st.session_state.get("resume_uploaded"):
-        st.info("Upload a resume to match with a job description.")
+    if not resume_text:
+        st.info("Upload a resume first.")
     else:
-        jd = st.text_area("📌 Paste Job Description")
+        st.subheader("🧩 Job Description Matcher")
+
+        jd_text = st.text_area(
+            "Paste Job Description",
+            height=200
+        )
 
         if st.button("Analyze Job Fit"):
-            st.session_state["job_fit_done"] = True
+            matched = keyword_score(resume_text, jd_text.split())
+            fit_score = min(100, matched * 2)
 
-            combined = normalize(st.session_state["resume_text"] + jd)
+            st.subheader("📊 Role Fit Score")
+            st.progress(fit_score / 100)
+            st.write(f"**Fit Score:** {fit_score}%")
 
-            role_keywords = {
-                "Technical Program Manager": ["program", "roadmap", "stakeholder"],
-                "RAN Engineer": ["ran", "lte", "5g"],
-                "Embedded Lead": ["embedded", "firmware", "rtos"],
-                "Cloud Engineer": ["aws", "kubernetes"],
-                "DevOps Engineer": ["ci/cd", "pipeline", "terraform"]
-            }
-
-            scores = {r: sum(1 for k in v if k in combined) for r, v in role_keywords.items()}
-            best_roles = sorted(scores, key=scores.get, reverse=True)[:3]
-            fit_score = min(100, sum(scores.values()) * 10)
-
-            st.success("### ✅ Job Fit Summary")
-            st.write("**Best-fit Roles:**")
-            for r in best_roles:
-                st.write(f"- {r}")
-            st.write(f"**Role Fit Score:** {fit_score}%")
-
-        # ========== Buy Me a Coffee (FIXED) ==========
-        if st.session_state.get("job_fit_done"):
-            st.markdown(
-                """
-                <div style="
-                    background-color:#f8f9fa;
-                    padding:18px;
-                    border-radius:12px;
-                    border:1px solid #e0e0e0;
-                    text-align:center;
-                    margin-top:24px;
-                    margin-bottom:24px;
-                ">
-                    <h4>☕ Found CareerScope AI useful?</h4>
-                    <p style="font-size:15px;">
-                        If this helped you gain clarity on your career direction,
-                        you can support the project with a coffee.
-                    </p>
-                    <a href="https://www.buymeacoffee.com/revanththiruvallur"
-                       target="_blank"
-                       style="
-                         display:inline-block;
-                         padding:10px 20px;
-                         background-color:#ffdd00;
-                         color:#000;
-                         font-weight:600;
-                         border-radius:8px;
-                         text-decoration:none;
-                       ">
-                       Buy me a coffee ☕
-                    </a>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
-        # AI Suggestions
-        if st.session_state.get("job_fit_done"):
             st.subheader("🤖 AI JD-Specific Resume Improvements")
-            if st.button("Get AI Improvement Suggestions"):
-                with st.spinner("Generating AI insights…"):
-                    prompt = f"""
-                    You are a senior hiring manager.
-                    Suggest resume improvements for this job.
 
-                    RESUME:
-                    {st.session_state["resume_text"]}
+            with st.spinner("Generating suggestions..."):
+                prompt = f"""
+                You are a senior career advisor.
 
-                    JOB DESCRIPTION:
-                    {jd}
-                    """
-                    st.write(ask_ai(prompt))
+                Resume:
+                {resume_text}
+
+                Job Description:
+                {jd_text}
+
+                Provide:
+                1. What to improve
+                2. Missing skills
+                3. Bullet-level suggestions
+                """
+
+                ai_out = ask_ai(prompt)
+                st.write(ai_out)
