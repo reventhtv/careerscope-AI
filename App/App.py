@@ -6,6 +6,7 @@ import base64
 import hashlib
 import time
 import pdfplumber
+from collections import OrderedDict
 
 from streamlit_tags import st_tags
 from Courses import (
@@ -29,7 +30,9 @@ except Exception:
         return "AI service temporarily unavailable."
 
 # ---------------- Constants ----------------
-AI_CACHE_TTL = 30 * 60  # 30 minutes
+AI_CACHE_TTL = 30 * 60           # 30 minutes
+AI_CACHE_MAX_SIZE = 20           # max cached responses
+PROMPT_VERSION = "v1.0.0"        # bump this when prompts change
 
 # ---------------- Sidebar ----------------
 st.sidebar.title("CareerScope AI")
@@ -106,10 +109,15 @@ def make_cache_key(*args):
 
 def init_ai_cache():
     if "ai_cache" not in st.session_state:
-        st.session_state["ai_cache"] = {}
+        st.session_state["ai_cache"] = OrderedDict()
 
 def is_cache_valid(entry):
     return (time.time() - entry["timestamp"]) < AI_CACHE_TTL
+
+def enforce_cache_limit():
+    cache = st.session_state["ai_cache"]
+    while len(cache) > AI_CACHE_MAX_SIZE:
+        cache.popitem(last=False)  # remove oldest
 
 # ---------------- UI ----------------
 st.title("🎯 CareerScope AI")
@@ -126,9 +134,10 @@ if section == "Resume Analysis":
         with open(path, "wb") as f:
             f.write(uploaded.getbuffer())
 
-        # Clear cache on new resume
+        # Reset AI state on new resume
         st.session_state.pop("ai_cache", None)
         st.session_state.pop("job_fit_done", None)
+        st.session_state.pop("ai_feedback", None)
 
         st.subheader("📄 Resume Preview")
         show_pdf(path)
@@ -188,13 +197,19 @@ elif section == "Job Match":
             if st.button("Get AI Suggestions"):
                 resume_text = st.session_state["resume_text"]
 
-                cache_key = make_cache_key(resume_text, jd, "jd_ai")
+                cache_key = make_cache_key(
+                    PROMPT_VERSION,
+                    resume_text,
+                    jd,
+                    "jd_ai"
+                )
 
-                cache_entry = st.session_state["ai_cache"].get(cache_key)
+                cache = st.session_state["ai_cache"]
+                entry = cache.get(cache_key)
 
-                if cache_entry and is_cache_valid(cache_entry):
+                if entry and is_cache_valid(entry):
                     st.success("Loaded from cache")
-                    st.write(cache_entry["response"])
+                    st.write(entry["response"])
                 else:
                     with st.spinner("Generating AI suggestions…"):
                         prompt = f"""
@@ -210,12 +225,23 @@ Give JD-specific resume improvement suggestions.
 """
                         response = ask_ai(prompt)
 
-                        st.session_state["ai_cache"][cache_key] = {
+                        cache[cache_key] = {
                             "response": response,
                             "timestamp": time.time()
                         }
 
+                        enforce_cache_limit()
                         st.write(response)
+
+                # Feedback
+                st.markdown("#### Was this helpful?")
+                col1, col2 = st.columns(2)
+                if col1.button("👍 Yes"):
+                    st.session_state["ai_feedback"] = "positive"
+                    st.success("Thanks for the feedback!")
+                if col2.button("👎 No"):
+                    st.session_state["ai_feedback"] = "negative"
+                    st.info("Thanks! This helps improve prompts.")
 
 # ================= About =================
 else:
