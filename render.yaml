@@ -1,0 +1,17 @@
+# render.yaml — CareerScope AI deployment config
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: careerscope-ai
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false          # Set this manually in the Render dashboard
+      - key: AI_MODEL
+        value: gemini-2.5-flash
+      - key: PYTHON_VERSION
+        value: "3.11.0"
