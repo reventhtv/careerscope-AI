@@ -213,6 +213,16 @@ async def ai_analyze(sid: str):
     text = _sessions[sid]["text"]
     prompt = f"""You are a senior career strategist and executive resume advisor.
 
+@app.get("/debug")
+async def debug():
+    import os
+    return {
+        "BASE_DIR": str(BASE_DIR),
+        "template_exists": (BASE_DIR / "templates" / "index.html").exists(),
+        "cwd": os.getcwd(),
+        "cwd_files": os.listdir(os.getcwd()),
+    }
+    
 Analyze this resume and provide a structured briefing:
 
 ### Overall Quality Score
