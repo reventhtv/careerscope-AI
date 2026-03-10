@@ -86,6 +86,16 @@ STOP_WORDS = {
     "may","had","been","over","than","just","other","about","should","would",
 }
 
+from fastapi.responses import RedirectResponse
+
+@app.middleware("http")
+async def redirect_www(request, call_next):
+    host = request.headers.get("host", "")
+    if host.startswith("www."):
+        url = str(request.url).replace("://www.", "://", 1)
+        return RedirectResponse(url, status_code=301)
+    return await call_next(request)
+
 
 # ── Routes ───────────────────────────────────────────────────
 
