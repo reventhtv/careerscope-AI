@@ -324,6 +324,98 @@ RESUME:
         return {"raw": raw, "parse_error": True}
 
 
+@app.post("/api/ai-resume-assist")
+async def ai_resume_assist(payload: dict):
+    """
+    Generic AI assist for resume builder.
+    payload = { action, context, section_type, extra }
+    actions: suggest_bullets | improve_text | generate_section | tailor_resume
+    """
+    from ai_client import ask_ai
+
+    action       = payload.get("action", "")
+    context      = payload.get("context", "")
+    section_type = payload.get("section_type", "")
+    extra        = payload.get("extra", "")
+
+    if action == "suggest_bullets":
+        prompt = f"""You are an expert resume writer.
+Generate exactly 3 strong, quantified resume bullet points for:
+Role: {context}
+Company/Context: {extra}
+
+Return ONLY valid JSON, no markdown:
+{{"bullets": ["bullet 1", "bullet 2", "bullet 3"]}}
+
+Rules:
+- Start each with a strong action verb
+- Include metrics/numbers where plausible (%, $, time saved, team size)
+- Keep each under 20 words
+- Be specific and impactful"""
+
+    elif action == "improve_text":
+        prompt = f"""You are an expert resume writer.
+Improve this resume text for section: {section_type}
+
+Original: {context}
+
+Return ONLY valid JSON, no markdown:
+{{"improved": "your improved version here", "reason": "brief explanation"}}
+
+Rules:
+- Make it more impactful, specific, and ATS-friendly
+- Use strong action verbs
+- Add quantification if possible
+- Keep similar length"""
+
+    elif action == "generate_section":
+        prompt = f"""You are an expert resume writer.
+Generate a complete {section_type} section for a resume.
+
+Context provided by user: {context}
+Additional info: {extra}
+
+Return ONLY valid JSON, no markdown:
+{{"content": "generated section content here"}}
+
+Rules:
+- Make it professional and ATS-optimized
+- Be specific to the context given
+- For summary: 3-4 impactful sentences
+- For skills: comma-separated grouped by category"""
+
+    elif action == "tailor_resume":
+        prompt = f"""You are an expert resume coach.
+Rewrite this resume summary/content to better match this job description.
+
+Current Resume Content:
+{context}
+
+Job Description:
+{extra}
+
+Return ONLY valid JSON, no markdown:
+{{"tailored": "rewritten content here", "keywords_added": ["kw1", "kw2", "kw3"]}}
+
+Rules:
+- Naturally incorporate JD keywords
+- Maintain authenticity - don't add skills they don't have
+- Make it more targeted and relevant"""
+
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown action: {action}")
+
+    raw = ask_ai(prompt)
+    try:
+        clean = raw.strip()
+        if clean.startswith("```"):
+            clean = re.sub(r"^```[a-z]*\n?", "", clean)
+            clean = re.sub(r"\n?```$", "", clean)
+        return json.loads(clean)
+    except Exception:
+        return {"raw": raw, "parse_error": True}
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
