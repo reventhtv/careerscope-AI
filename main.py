@@ -101,14 +101,13 @@ async def redirect_www(request, call_next):
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    html_path = BASE_DIR / "templates" / "index.html"
-    if html_path.exists():
-        return html_path.read_text(encoding="utf-8")
-    # Fallback — check one level up
-    alt_path = Path("/opt/render/project/src/templates/index.html")
-    if alt_path.exists():
-        return alt_path.read_text(encoding="utf-8")
-    raise HTTPException(status_code=500, detail=f"Template not found. BASE_DIR={BASE_DIR}")
+    for candidate in [
+        Path(__file__).parent.resolve() / "templates" / "index.html",
+        Path("/opt/render/project/src/templates/index.html"),
+    ]:
+        if candidate.exists():
+            return candidate.read_text(encoding="utf-8")
+    raise HTTPException(status_code=500, detail="Template not found")
 
 
 @app.get("/health")
