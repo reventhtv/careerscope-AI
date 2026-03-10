@@ -1,11 +1,12 @@
 """
-main.py — CareerScope AI · FastAPI Backend
+main.py — CareerScope AI v2 · FastAPI Backend
 """
 
 import io
 import os
 import re
 import uuid
+import json
 from pathlib import Path
 
 import pdfplumber
@@ -19,6 +20,8 @@ _sessions: dict[str, dict] = {}
 BASE_DIR = Path(__file__).parent.resolve()
 
 
+# ── PDF helpers ──────────────────────────────────────────────
+
 def extract_text_from_pdf_bytes(data: bytes) -> str:
     text = ""
     try:
@@ -30,15 +33,56 @@ def extract_text_from_pdf_bytes(data: bytes) -> str:
     return text.strip()
 
 
-def calculate_ats_score(text: str) -> int:
-    checks = [
-        bool(re.search(r"\S+@\S+\.\S+", text)),
-        bool(re.search(r"\+?\d[\d\s\-]{8,}", text)),
-        "education" in text.lower(),
-        "experience" in text.lower(),
-        "skills" in text.lower(),
+# ── Analysis helpers ─────────────────────────────────────────
+
+def calculate_ats_breakdown(text: str) -> dict:
+    t = text.lower()
+
+    # Contact
+    has_email = bool(re.search(r"\S+@\S+\.\S+", text))
+    has_phone = bool(re.search(r"\+?\d[\d\s\-]{8,}", text))
+    has_linkedin = "linkedin" in t
+    contact_score = int(((has_email + has_phone + has_linkedin) / 3) * 100)
+
+    # Keywords density
+    keyword_sections = sum([
+        "skills" in t, "experience" in t, "education" in t,
+        "summary" in t or "objective" in t or "profile" in t,
+        "projects" in t or "achievements" in t or "accomplishments" in t,
+    ])
+    keywords_score = int((keyword_sections / 5) * 100)
+
+    # Quantified achievements
+    numbers = re.findall(r"\b\d+[%xX]?\b", text)
+    quant_score = min(100, len(numbers) * 10)
+
+    # Structure
+    sections = sum([
+        "education" in t, "experience" in t or "work" in t,
+        "skills" in t, "summary" in t or "profile" in t or "objective" in t,
+        "projects" in t or "certifications" in t or "achievements" in t,
+    ])
+    structure_score = int((sections / 5) * 100)
+
+    # Action verbs
+    action_verbs = [
+        "led", "built", "designed", "developed", "managed", "delivered",
+        "improved", "increased", "reduced", "launched", "created", "implemented",
+        "optimized", "architected", "spearheaded", "drove", "achieved", "automated",
     ]
-    return int(sum(checks) / len(checks) * 100)
+    verb_count = sum(1 for v in action_verbs if v in t)
+    verbs_score = min(100, verb_count * 12)
+
+    overall = int((contact_score + keywords_score + quant_score + structure_score + verbs_score) / 5)
+
+    return {
+        "overall": overall,
+        "contact": contact_score,
+        "keywords": keywords_score,
+        "quantified": quant_score,
+        "structure": structure_score,
+        "action_verbs": verbs_score,
+    }
 
 
 def experience_level(text: str) -> str:
@@ -80,19 +124,11 @@ STOP_WORDS = {
 }
 
 
+# ── Routes ───────────────────────────────────────────────────
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
-
-
-@app.get("/debug")
-async def debug():
-    return {
-        "BASE_DIR": str(BASE_DIR),
-        "template_exists": (BASE_DIR / "templates" / "index.html").exists(),
-        "cwd": os.getcwd(),
-        "cwd_files": os.listdir(os.getcwd()),
-    }
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -132,8 +168,10 @@ async def get_insights(sid: str):
     domain, confidence = detect_domain(text)
     email_m = re.search(r"\S+@\S+\.\S+", text)
     phone_m = re.search(r"\+?\d[\d\s\-]{8,}", text)
+    ats = calculate_ats_breakdown(text)
     return {
-        "ats_score":         calculate_ats_score(text),
+        "ats_score":         ats["overall"],
+        "ats_breakdown":     ats,
         "experience_level":  experience_level(text),
         "domain":            domain,
         "domain_confidence": confidence,
@@ -166,31 +204,52 @@ async def ai_suggest(sid: str, jd: str = Form(...)):
         raise HTTPException(status_code=404, detail="Session not found.")
     from ai_client import ask_ai
     text = _sessions[sid]["text"]
-    prompt = f"""You are an expert resume coach and hiring strategist.
 
-Analyze this resume against the job description and provide:
+    prompt = f"""You are an expert resume coach. Analyze this resume against the job description.
 
-### 1. Top 3 Resume Improvements
-Specific, actionable changes to tailor this resume for this exact role.
+Return ONLY valid JSON, no markdown, no explanation, exactly this structure:
+{{
+  "improvements": [
+    {{"priority": 1, "title": "...", "action": "..."}},
+    {{"priority": 2, "title": "...", "action": "..."}},
+    {{"priority": 3, "title": "...", "action": "..."}}
+  ],
+  "skill_gaps": [
+    {{"skill": "...", "level": "missing|partial|strong", "gap": "critical|moderate|none", "course": "..."}},
+    ...
+  ],
+  "bullet_rewrites": [
+    {{"original": "...", "rewritten": "...", "reason": "..."}},
+    {{"original": "...", "rewritten": "...", "reason": "..."}},
+    {{"original": "...", "rewritten": "...", "reason": "..."}}
+  ],
+  "candidacy": {{
+    "rating": "Strong|Moderate|Weak",
+    "justification": "..."
+  }}
+}}
 
-### 2. Skills Gap Analysis
-Key skills, tools, or qualifications the JD requires that are missing or underrepresented in the resume.
+Extract real bullet points from the resume for bullet_rewrites.
+For skill_gaps, list 6-8 skills the JD requires.
+Keep all text concise and actionable.
 
-### 3. Bullet Point Rewrites
-Pick 2–3 existing resume bullet points and rewrite them to better align with the JD's language and priorities.
-
-### 4. Candidacy Assessment
-Rate the overall fit as **Strong**, **Moderate**, or **Weak**. Justify in 2 concise sentences.
-
----
 RESUME:
 {text[:3000]}
 
----
 JOB DESCRIPTION:
-{jd[:2000]}
-"""
-    return {"suggestion": ask_ai(prompt)}
+{jd[:2000]}"""
+
+    raw = ask_ai(prompt)
+
+    try:
+        clean = raw.strip()
+        if clean.startswith("```"):
+            clean = re.sub(r"^```[a-z]*\n?", "", clean)
+            clean = re.sub(r"\n?```$", "", clean)
+        result = json.loads(clean)
+        return result
+    except Exception:
+        return {"raw": raw, "parse_error": True}
 
 
 @app.get("/api/ai-analyze/{sid}")
@@ -221,11 +280,48 @@ List 3–4 specific job titles and types of organizations that would be strong m
 ### One Bold Move
 One unconventional suggestion that could significantly accelerate their career.
 
+Be candid, strategic, and specific. Avoid generic platitudes.
+
 ---
 RESUME:
 {text[:4000]}
 """
     return {"analysis": ask_ai(prompt)}
+
+
+@app.get("/api/linkedin/{sid}")
+async def linkedin_headline(sid: str):
+    if sid not in _sessions:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    from ai_client import ask_ai
+    text = _sessions[sid]["text"]
+    prompt = f"""You are a LinkedIn personal branding expert.
+
+Based on this resume, generate 3 LinkedIn headline options.
+
+Return ONLY valid JSON, no markdown:
+{{
+  "headlines": [
+    {{"headline": "...", "style": "Achievement-focused", "why": "..."}},
+    {{"headline": "...", "style": "Role + Value prop", "why": "..."}},
+    {{"headline": "...", "style": "Bold/Unconventional", "why": "..."}}
+  ]
+}}
+
+Each headline must be under 220 characters, punchy, and keyword-rich.
+
+RESUME:
+{text[:2000]}"""
+
+    raw = ask_ai(prompt)
+    try:
+        clean = raw.strip()
+        if clean.startswith("```"):
+            clean = re.sub(r"^```[a-z]*\n?", "", clean)
+            clean = re.sub(r"\n?```$", "", clean)
+        return json.loads(clean)
+    except Exception:
+        return {"raw": raw, "parse_error": True}
 
 
 if __name__ == "__main__":
