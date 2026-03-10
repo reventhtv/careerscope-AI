@@ -1142,6 +1142,8 @@ async function handleUpload(file) {
   try {
     const form = new FormData();
     form.append('file', file);
+    // Send previous session id so backend can clean it up
+    if (sessionId) form.append('prev_session_id', sessionId);
     const r = await fetch('/api/upload', { method: 'POST', body: form });
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail || 'Upload failed');
@@ -1697,19 +1699,12 @@ function init() {
     })
   );
 
-  document.getElementById('upload-new-btn').addEventListener('click', () => {
-    sessionId = null;
-    cache.analysis = null; cache.improvements = null; cache.linkedin = null;
-    document.getElementById('analysis-output').innerHTML = '';
-    document.getElementById('analysis-output').classList.add('hidden');
-    document.getElementById('run-analysis-btn').disabled = false;
-    document.getElementById('run-analysis-btn').textContent = '⊕ Analyze Resume';
-    document.getElementById('jd-input').value = '';
-    document.getElementById('match-results').classList.add('hidden');
-    document.getElementById('headline-cards').classList.add('hidden');
-    document.getElementById('run-linkedin-btn').disabled = false;
-    document.getElementById('run-linkedin-btn').textContent = '◈ Generate Headlines';
-    showScreen('screen-upload');
+  document.getElementById('upload-new-btn').addEventListener('click', async () => {
+    // Delete session on server before resetting
+    if (sessionId) {
+      try { await fetch(`/api/session/${sessionId}`, { method: 'DELETE' }); } catch {}
+    }
+    fullReset();
   });
 
   document.getElementById('overview-analyze-btn').addEventListener('click', () => {
@@ -2600,6 +2595,76 @@ function initBuilder() {
   renderWizard();
   addExp();
   addEdu();
+}
+
+// ── FULL STATE RESET ─────────────────────────────────────────
+function fullReset() {
+  sessionId = null;
+  jdHistory = [];
+  autoFillDone = false;
+  cache.analysis = null; cache.improvements = null; cache.linkedin = null;
+
+  // Reset builder state
+  expIdx = 0; eduIdx = 0; projIdx = 0; certIdx = 0;
+  rb = { template: 'modern', personal: {}, summary: '', experience: [], education: [], skills: { tech: '', soft: '', tools: '' }, projects: [], certifications: [] };
+  autoFillDone = false;
+
+  // Reset all panels to initial state
+  const els = {
+    'analysis-output':     { html: '', hidden: true },
+    'run-analysis-btn':    { text: '⊕ Analyze Resume', disabled: false },
+    'jd-input':            { value: '' },
+    'match-results':       { hidden: true },
+    'structured-results':  { hidden: true },
+    'improve-output':      { hidden: true },
+    'headline-cards':      { hidden: true },
+    'run-linkedin-btn':    { text: '◈ Generate Headlines', disabled: false },
+    'jd-history-wrap':     { hidden: true },
+    'autofill-banner':     { display: 'none' },
+  };
+  for (const [id, ops] of Object.entries(els)) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    if ('html'     in ops) el.innerHTML = ops.html;
+    if ('text'     in ops) el.textContent = ops.text;
+    if ('value'    in ops) el.value = ops.value;
+    if ('disabled' in ops) el.disabled = ops.disabled;
+    if ('hidden'   in ops) el.classList.toggle('hidden', ops.hidden);
+    if ('display'  in ops) el.style.display = ops.display;
+  }
+
+  // Reset builder UI
+  const expList  = document.getElementById('exp-list');
+  const eduList  = document.getElementById('edu-list');
+  const projList = document.getElementById('proj-list');
+  const certList = document.getElementById('cert-list');
+  if (expList)  expList.innerHTML  = '';
+  if (eduList)  eduList.innerHTML  = '';
+  if (projList) projList.innerHTML = '';
+  if (certList) certList.innerHTML = '';
+
+  // Re-add default blank entries
+  addExp(); addEdu();
+
+  // Reset live ATS bar
+  const fill = document.getElementById('live-ats-fill');
+  const val  = document.getElementById('live-ats-val');
+  if (fill) { fill.style.width = '0%'; }
+  if (val)  { val.textContent = '0%'; val.style.color = ''; }
+  const atsBar = document.getElementById('live-ats-bar');
+  if (atsBar) atsBar.style.display = 'none';
+
+  // Reset builder step to 0
+  bStep = 0;
+  renderWizard();
+
+  // Reset preview pane
+  const right = document.getElementById('builder-right');
+  if (right) right.style.display = 'none';
+  const preview = document.getElementById('resume-preview-content');
+  if (preview) preview.innerHTML = '';
+
+  showScreen('screen-upload');
 }
 
 init();

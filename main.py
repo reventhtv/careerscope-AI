@@ -16,8 +16,16 @@ from fastapi.responses import HTMLResponse
 app = FastAPI(title="CareerScope AI")
 
 _sessions: dict[str, dict] = {}
+_active_session: list[str] = []   # single-slot — only one live session at a time
 
 BASE_DIR = Path(__file__).parent.resolve()
+
+
+def _clear_session(sid: str) -> None:
+    """Remove a session and all cached data associated with it."""
+    _sessions.pop(sid, None)
+    if sid in _active_session:
+        _active_session.remove(sid)
 
 
 # ── PDF helpers ──────────────────────────────────────────────
@@ -143,7 +151,10 @@ async def root():
 
 
 @app.post("/api/upload")
-async def upload_resume(file: UploadFile = File(...)):
+async def upload_resume(
+    file: UploadFile = File(...),
+    prev_session_id: str = Form(default=""),
+):
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
     data = await file.read()
@@ -155,9 +166,25 @@ async def upload_resume(file: UploadFile = File(...)):
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not text:
         raise HTTPException(status_code=422, detail="PDF appears to be empty or image-only.")
+
+    # ── Clear previous session before creating a new one ──────────
+    if prev_session_id:
+        _clear_session(prev_session_id)
+    # Also clear any other lingering session (safety net)
+    for old_sid in list(_active_session):
+        _clear_session(old_sid)
+
     sid = str(uuid.uuid4())
     _sessions[sid] = {"text": text, "filename": file.filename}
+    _active_session.append(sid)
     return {"session_id": sid, "filename": file.filename}
+
+
+@app.delete("/api/session/{sid}")
+async def delete_session(sid: str):
+    """Explicitly clear a session — called when user clicks Upload New Resume."""
+    _clear_session(sid)
+    return {"deleted": sid}
 
 
 @app.get("/api/insights/{sid}")
