@@ -19,7 +19,7 @@ app = FastAPI(title="CareerScope AI")
 # ── In-memory session store ──────────────────────────────────
 _sessions: dict[str, dict] = {}
 
-BASE_DIR = Path(__file__).parent
+BASE_DIR = Path(__file__).parent.resolve()
 
 
 # ── PDF helpers ──────────────────────────────────────────────
