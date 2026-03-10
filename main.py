@@ -324,6 +324,96 @@ RESUME:
         return {"raw": raw, "parse_error": True}
 
 
+@app.get("/api/extract-resume/{sid}")
+async def extract_resume(sid: str):
+    """
+    Extract structured data from uploaded resume text using AI.
+    Returns JSON matching the resume builder data model.
+    """
+    if sid not in _sessions:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    from ai_client import ask_ai
+    text = _sessions[sid]["text"]
+
+    prompt = f"""You are a resume parser. Extract ALL information from this resume into structured JSON.
+
+Return ONLY valid JSON, no markdown, exactly this structure:
+{{
+  "personal": {{
+    "name": "full name",
+    "title": "current job title or headline",
+    "email": "email address",
+    "phone": "phone number",
+    "location": "city, state/country",
+    "linkedin": "linkedin url or username",
+    "portfolio": "github or portfolio url",
+    "website": "personal website if any"
+  }},
+  "summary": "professional summary or objective paragraph",
+  "experience": [
+    {{
+      "role": "job title",
+      "company": "company name",
+      "location": "city",
+      "start": "Mon YYYY",
+      "end": "Mon YYYY or Present",
+      "bullets": ["bullet 1", "bullet 2", "bullet 3"]
+    }}
+  ],
+  "education": [
+    {{
+      "institution": "university name",
+      "degree": "degree type e.g. B.Tech",
+      "field": "field of study",
+      "year": "graduation year",
+      "gpa": "GPA if mentioned"
+    }}
+  ],
+  "skills": {{
+    "tech": "comma-separated technical skills",
+    "soft": "comma-separated soft skills and leadership skills",
+    "tools": "comma-separated tools and platforms"
+  }},
+  "projects": [
+    {{
+      "name": "project name",
+      "url": "project url if any",
+      "tech": "tech stack",
+      "bullets": ["highlight 1", "highlight 2"]
+    }}
+  ],
+  "certifications": [
+    {{
+      "name": "certification name",
+      "issuer": "issuing organization",
+      "year": "year"
+    }}
+  ]
+}}
+
+Rules:
+- Extract ALL positions from experience, not just the most recent
+- Extract ALL education entries
+- Extract ALL projects mentioned
+- Keep bullet points as-is from the resume
+- If a field is not found, use empty string "" or empty array []
+- For skills: separate technical (programming, frameworks, protocols) from soft (leadership, communication) from tools (software, platforms)
+- Dates should be formatted as "Mon YYYY" e.g. "Jan 2022"
+
+RESUME TEXT:
+{text[:5000]}"""
+
+    raw = ask_ai(prompt)
+    try:
+        clean = raw.strip()
+        if clean.startswith("```"):
+            clean = re.sub(r"^```[a-z]*\n?", "", clean)
+            clean = re.sub(r"\n?```$", "", clean)
+        return json.loads(clean)
+    except Exception:
+        return {"parse_error": True, "raw": raw[:500]}
+
+
 @app.post("/api/ai-resume-assist")
 async def ai_resume_assist(payload: dict):
     """

@@ -399,6 +399,18 @@
     @keyframes slideUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
     .hidden { display: none !important; }
 
+
+    /* ── AUTOFILL BANNER ── */
+    .autofill-banner {
+      display: none; align-items: center; gap: 14px;
+      background: var(--purple-dim); border: 1px solid rgba(180,124,255,.25);
+      border-radius: var(--radius); padding: 14px 20px; margin-bottom: 24px;
+    }
+    .autofill-spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--purple); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
+    .autofill-status { font-family: var(--fm); font-size: .75rem; color: var(--purple); flex: 1; }
+    .autofill-skip { font-family: var(--fm); font-size: .65rem; color: var(--text-muted); background: none; border: none; cursor: pointer; padding: 4px 8px; }
+    .autofill-skip:hover { color: var(--text); }
+
     /* ── SCROLLBAR ── */
     ::-webkit-scrollbar { width: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -828,6 +840,14 @@
 
       <!-- ── BUILDER ── -->
       <div class="panel" id="panel-builder">
+
+
+        <!-- Autofill Banner -->
+        <div class="autofill-banner" id="autofill-banner">
+          <div class="autofill-spinner"></div>
+          <span class="autofill-status">✦ Detecting resume data…</span>
+          <button class="autofill-skip" onclick="elById('autofill-banner').style.display='none'">Skip</button>
+        </div>
 
         <div class="live-ats-bar" id="live-ats-bar" style="display:none;">
           <span class="live-ats-label">Live ATS</span>
@@ -1669,7 +1689,12 @@ function init() {
   initUpload();
 
   document.querySelectorAll('.nav-btn').forEach(btn =>
-    btn.addEventListener('click', () => showPanel(btn.dataset.panel))
+    btn.addEventListener('click', () => {
+      showPanel(btn.dataset.panel);
+      if (btn.dataset.panel === 'builder' && sessionId && !autoFillDone) {
+        autoFillFromResume();
+      }
+    })
   );
 
   document.getElementById('upload-new-btn').addEventListener('click', () => {
@@ -2380,6 +2405,165 @@ function exportResumePDF() {
 </html>`);
   printWindow.document.close();
   setTimeout(() => { printWindow.focus(); printWindow.print(); }, 600);
+}
+
+
+// ── AUTO-FILL FROM UPLOADED RESUME ───
+let autoFillDone = false;
+
+async function autoFillFromResume() {
+  if (!sessionId || autoFillDone) return;
+  autoFillDone = true;
+
+  // Show banner
+  const banner = elById('autofill-banner');
+  if (banner) {
+    banner.style.display = 'flex';
+    banner.querySelector('.autofill-status').textContent = '✦ Extracting your resume data…';
+  }
+
+  try {
+    const r = await fetch(`/api/extract-resume/${sessionId}`);
+    const d = await r.json();
+
+    if (d.parse_error) {
+      if (banner) banner.style.display = 'none';
+      showToast('Could not auto-fill — fill manually', true);
+      return;
+    }
+
+    // Personal info
+    const p = d.personal || {};
+    setField('b-name',      p.name);
+    setField('b-title',     p.title);
+    setField('b-email',     p.email);
+    setField('b-phone',     p.phone);
+    setField('b-location',  p.location);
+    setField('b-linkedin',  p.linkedin);
+    setField('b-portfolio', p.portfolio);
+    setField('b-website',   p.website);
+
+    // Summary
+    if (d.summary) setField('b-summary', d.summary);
+
+    // Skills
+    if (d.skills) {
+      setField('b-skills-tech',  d.skills.tech);
+      setField('b-skills-soft',  d.skills.soft);
+      setField('b-skills-tools', d.skills.tools);
+    }
+
+    // Clear default empty entries added by initBuilder
+    ['exp-list','edu-list'].forEach(id => {
+      const el = elById(id);
+      if (el) el.innerHTML = '';
+    });
+
+    // Experience
+    if (d.experience?.length) {
+      d.experience.forEach(exp => {
+        addExp();
+        const idx = expIdx - 1;
+        setField(`exp-role-${idx}`,    exp.role);
+        setField(`exp-company-${idx}`, exp.company);
+        setField(`exp-loc-${idx}`,     exp.location);
+        setField(`exp-start-${idx}`,   exp.start);
+        if (exp.end === 'Present') {
+          const cb = elById(`exp-current-${idx}`);
+          if (cb) { cb.checked = true; toggleCurrentJob(idx); }
+        } else {
+          setField(`exp-end-${idx}`, exp.end);
+        }
+        // Fill bullets
+        const list = elById(`exp-bullets-${idx}`);
+        if (list) {
+          list.innerHTML = '';
+          const bullets = exp.bullets?.length ? exp.bullets : [''];
+          bullets.forEach(b => {
+            const row = document.createElement('div');
+            row.className = 'bullet-input-row';
+            row.innerHTML = `<input class="bullet-input" value="${escAttr(b)}" oninput="syncResume()">
+              <button class="bullet-remove-btn" onclick="this.closest('.bullet-input-row').remove();syncResume()">✕</button>`;
+            list.appendChild(row);
+          });
+        }
+        updateExpHeader(idx);
+      });
+    } else {
+      addExp();
+    }
+
+    // Education
+    if (d.education?.length) {
+      d.education.forEach(edu => {
+        addEdu();
+        const idx = eduIdx - 1;
+        setField(`edu-inst-${idx}`,   edu.institution);
+        setField(`edu-degree-${idx}`, edu.degree);
+        setField(`edu-field-${idx}`,  edu.field);
+        setField(`edu-year-${idx}`,   edu.year);
+        setField(`edu-gpa-${idx}`,    edu.gpa);
+        updateEduHeader(idx);
+      });
+    } else {
+      addEdu();
+    }
+
+    // Projects
+    if (d.projects?.length) {
+      d.projects.forEach(proj => {
+        addProj();
+        const idx = projIdx - 1;
+        setField(`proj-name-${idx}`, proj.name);
+        setField(`proj-url-${idx}`,  proj.url);
+        setField(`proj-tech-${idx}`, proj.tech);
+        const list = elById(`proj-bullets-${idx}`);
+        if (list && proj.bullets?.length) {
+          list.innerHTML = '';
+          proj.bullets.forEach(b => {
+            const row = document.createElement('div');
+            row.className = 'bullet-input-row';
+            row.innerHTML = `<input class="bullet-input" value="${escAttr(b)}" oninput="syncResume()">
+              <button class="bullet-remove-btn" onclick="this.closest('.bullet-input-row').remove();syncResume()">✕</button>`;
+            list.appendChild(row);
+          });
+        }
+      });
+    }
+
+    // Certifications
+    if (d.certifications?.length) {
+      d.certifications.forEach(cert => {
+        addCert();
+        const idx = certIdx - 1;
+        setField(`cert-name-${idx}`,   cert.name);
+        setField(`cert-issuer-${idx}`, cert.issuer);
+        setField(`cert-year-${idx}`,   cert.year);
+      });
+    }
+
+    syncResume();
+    updateLiveATS();
+
+    if (banner) {
+      banner.querySelector('.autofill-status').textContent = '✓ Resume data imported successfully — review and edit below';
+      banner.style.background = 'rgba(0,230,118,.08)';
+      banner.style.borderColor = 'rgba(0,230,118,.3)';
+      banner.querySelector('.autofill-status').style.color = 'var(--green)';
+      setTimeout(() => { banner.style.display = 'none'; }, 4000);
+    }
+    showToast('Resume auto-filled ✓ — review each section');
+
+  } catch (err) {
+    if (banner) banner.style.display = 'none';
+    showToast('Auto-fill failed: ' + err.message, true);
+    autoFillDone = false;
+  }
+}
+
+function setField(id, value) {
+  const el = elById(id);
+  if (el && value) el.value = value;
 }
 
 // ── INIT BUILDER ──────────────────────
