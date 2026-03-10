@@ -166,4 +166,69 @@ async def ai_suggest(sid: str, jd: str = Form(...)):
         raise HTTPException(status_code=404, detail="Session not found.")
     from ai_client import ask_ai
     text = _sessions[sid]["text"]
-    prompt = f"""You are an expert resume coach and h
+    prompt = f"""You are an expert resume coach and hiring strategist.
+
+Analyze this resume against the job description and provide:
+
+### 1. Top 3 Resume Improvements
+Specific, actionable changes to tailor this resume for this exact role.
+
+### 2. Skills Gap Analysis
+Key skills, tools, or qualifications the JD requires that are missing or underrepresented in the resume.
+
+### 3. Bullet Point Rewrites
+Pick 2–3 existing resume bullet points and rewrite them to better align with the JD's language and priorities.
+
+### 4. Candidacy Assessment
+Rate the overall fit as **Strong**, **Moderate**, or **Weak**. Justify in 2 concise sentences.
+
+---
+RESUME:
+{text[:3000]}
+
+---
+JOB DESCRIPTION:
+{jd[:2000]}
+"""
+    return {"suggestion": ask_ai(prompt)}
+
+
+@app.get("/api/ai-analyze/{sid}")
+async def ai_analyze(sid: str):
+    if sid not in _sessions:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    from ai_client import ask_ai
+    text = _sessions[sid]["text"]
+    prompt = f"""You are a senior career strategist and executive resume advisor.
+
+Analyze this resume and provide a structured briefing:
+
+### Overall Quality Score
+Rate /10 with a single sentence justification.
+
+### Top 3 Strengths
+What this resume does well — be specific, not generic.
+
+### Top 3 Improvement Areas
+Prioritized weaknesses with concrete fixes for each.
+
+### Career Trajectory
+Where this person currently sits and two realistic next moves (6–18 months, 3–5 years).
+
+### Ideal Roles & Target Companies
+List 3–4 specific job titles and types of organizations that would be strong matches.
+
+### One Bold Move
+One unconventional suggestion that could significantly accelerate their career.
+
+---
+RESUME:
+{text[:4000]}
+"""
+    return {"analysis": ask_ai(prompt)}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
