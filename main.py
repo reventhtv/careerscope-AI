@@ -1,7 +1,5 @@
 """
 main.py — CareerScope AI · FastAPI Backend
-Serves the single-page frontend and all API endpoints.
-Deploy on Render: uvicorn main:app --host 0.0.0.0 --port $PORT
 """
 
 import io
@@ -16,13 +14,10 @@ from fastapi.responses import HTMLResponse
 
 app = FastAPI(title="CareerScope AI")
 
-# ── In-memory session store ──────────────────────────────────
 _sessions: dict[str, dict] = {}
 
 BASE_DIR = Path(__file__).parent.resolve()
 
-
-# ── PDF helpers ──────────────────────────────────────────────
 
 def extract_text_from_pdf_bytes(data: bytes) -> str:
     text = ""
@@ -35,12 +30,10 @@ def extract_text_from_pdf_bytes(data: bytes) -> str:
     return text.strip()
 
 
-# ── Analysis helpers ─────────────────────────────────────────
-
 def calculate_ats_score(text: str) -> int:
     checks = [
-        bool(re.search(r"\S+@\S+\.\S+", text)),           # email
-        bool(re.search(r"\+?\d[\d\s\-]{8,}", text)),       # phone
+        bool(re.search(r"\S+@\S+\.\S+", text)),
+        bool(re.search(r"\+?\d[\d\s\-]{8,}", text)),
         "education" in text.lower(),
         "experience" in text.lower(),
         "skills" in text.lower(),
@@ -86,33 +79,31 @@ STOP_WORDS = {
     "may","had","been","over","than","just","other","about","should","would",
 }
 
-from fastapi.responses import RedirectResponse
-
-@app.middleware("http")
-async def redirect_www(request, call_next):
-    host = request.headers.get("host", "")
-    if host.startswith("www."):
-        url = str(request.url).replace("://www.", "://", 1)
-        return RedirectResponse(url, status_code=301)
-    return await call_next(request)
-
-
-# ── Routes ───────────────────────────────────────────────────
-
-@app.get("/", response_class=HTMLResponse)
-async def root():
-    for candidate in [
-        Path(__file__).parent.resolve() / "templates" / "index.html",
-        Path("/opt/render/project/src/templates/index.html"),
-    ]:
-        if candidate.exists():
-            return candidate.read_text(encoding="utf-8")
-    raise HTTPException(status_code=500, detail="Template not found")
-
 
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/debug")
+async def debug():
+    return {
+        "BASE_DIR": str(BASE_DIR),
+        "template_exists": (BASE_DIR / "templates" / "index.html").exists(),
+        "cwd": os.getcwd(),
+        "cwd_files": os.listdir(os.getcwd()),
+    }
+
+
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    for candidate in [
+        BASE_DIR / "templates" / "index.html",
+        Path("/opt/render/project/src/templates/index.html"),
+    ]:
+        if candidate.exists():
+            return candidate.read_text(encoding="utf-8")
+    raise HTTPException(status_code=500, detail=f"Template not found. BASE_DIR={BASE_DIR}")
 
 
 @app.post("/api/upload")
@@ -127,7 +118,7 @@ async def upload_resume(file: UploadFile = File(...)):
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not text:
-        raise HTTPException(status_code=422, detail="PDF appears to be empty or image-only. Please use a text-based PDF.")
+        raise HTTPException(status_code=422, detail="PDF appears to be empty or image-only.")
     sid = str(uuid.uuid4())
     _sessions[sid] = {"text": text, "filename": file.filename}
     return {"session_id": sid, "filename": file.filename}
@@ -175,83 +166,4 @@ async def ai_suggest(sid: str, jd: str = Form(...)):
         raise HTTPException(status_code=404, detail="Session not found.")
     from ai_client import ask_ai
     text = _sessions[sid]["text"]
-    prompt = f"""You are an expert resume coach and hiring strategist.
-
-Analyze this resume against the job description and provide:
-
-### 1. Top 3 Resume Improvements
-Specific, actionable changes to tailor this resume for this exact role.
-
-### 2. Skills Gap Analysis
-Key skills, tools, or qualifications the JD requires that are missing or underrepresented in the resume.
-
-### 3. Bullet Point Rewrites
-Pick 2–3 existing resume bullet points and rewrite them to better align with the JD's language and priorities.
-
-### 4. Candidacy Assessment
-Rate the overall fit as **Strong**, **Moderate**, or **Weak**. Justify in 2 concise sentences.
-
-Keep everything professional, specific, and immediately actionable.
-
----
-RESUME:
-{text[:3000]}
-
----
-JOB DESCRIPTION:
-{jd[:2000]}
-"""
-    return {"suggestion": ask_ai(prompt)}
-
-
-@app.get("/api/ai-analyze/{sid}")
-async def ai_analyze(sid: str):
-    if sid not in _sessions:
-        raise HTTPException(status_code=404, detail="Session not found.")
-    from ai_client import ask_ai
-    text = _sessions[sid]["text"]
-    prompt = f"""You are a senior career strategist and executive resume advisor.
-
-@app.get("/debug")
-async def debug():
-    import os
-    return {
-        "BASE_DIR": str(BASE_DIR),
-        "template_exists": (BASE_DIR / "templates" / "index.html").exists(),
-        "cwd": os.getcwd(),
-        "cwd_files": os.listdir(os.getcwd()),
-    }
-    
-Analyze this resume and provide a structured briefing:
-
-### Overall Quality Score
-Rate /10 with a single sentence justification.
-
-### Top 3 Strengths
-What this resume does well — be specific, not generic.
-
-### Top 3 Improvement Areas
-Prioritized weaknesses with concrete fixes for each.
-
-### Career Trajectory
-Where this person currently sits and two realistic next moves (6–18 months, 3–5 years).
-
-### Ideal Roles & Target Companies
-List 3–4 specific job titles and types of organizations that would be strong matches.
-
-### One Bold Move
-One unconventional suggestion — a certification, side project, pivot, or networking strategy — that could significantly accelerate their career.
-
-Be candid, strategic, and specific. Avoid generic platitudes.
-
----
-RESUME:
-{text[:4000]}
-"""
-    return {"analysis": ask_ai(prompt)}
-
-
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+    prompt = f"""You are an expert resume coach and h
