@@ -110,6 +110,51 @@ def _clear_session(sid: str) -> None:
     if sid in _active_session:
         _active_session.remove(sid)
 
+def _extract_json(raw: str) -> dict | list:
+    """
+    Robustly extract JSON from an AI response that may contain
+    leading/trailing prose, markdown fences, or other noise.
+    Tries multiple strategies in order.
+    """
+    text = raw.strip()
+
+    # Strategy 1: strip markdown fences
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-z]*\n?", "", text)
+        text = re.sub(r"\n?```$", "", text.strip())
+        try:
+            return json.loads(text.strip())
+        except Exception:
+            pass
+
+    # Strategy 2: direct parse (already clean)
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+
+    # Strategy 3: find first { ... } block (handles leading prose)
+    start = text.find('{')
+    end   = text.rfind('}')
+    if start != -1 and end != -1 and end > start:
+        try:
+            return json.loads(text[start:end+1])
+        except Exception:
+            pass
+
+    # Strategy 4: find first [ ... ] block (list response)
+    start = text.find('[')
+    end   = text.rfind(']')
+    if start != -1 and end != -1 and end > start:
+        try:
+            return json.loads(text[start:end+1])
+        except Exception:
+            pass
+
+    raise ValueError(f"No valid JSON found in response: {text[:200]}")
+
+
+
 
 # ── PDF helpers ──────────────────────────────────────────────
 
@@ -220,7 +265,12 @@ STOP_WORDS = {
 @app.get("/health")
 async def health():
     track("ping")
-    return {"status": "ok", "ts": datetime.now(timezone.utc).isoformat()}
+    from ai_client import ai_status
+    return {
+        "status": "ok",
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "ai": ai_status(),
+    }
 
 
 @app.get("/ping")
@@ -389,7 +439,8 @@ JOB DESCRIPTION:
         if clean.startswith("```"):
             clean = re.sub(r"^```[a-z]*\n?", "", clean)
             clean = re.sub(r"\n?```$", "", clean)
-        result = json.loads(clean)
+        result = _extract_json(raw)
+        track("ai_suggest", {"sid": sid})
         return result
     except Exception:
         return {"raw": raw, "parse_error": True}
@@ -464,7 +515,9 @@ RESUME:
         if clean.startswith("```"):
             clean = re.sub(r"^```[a-z]*\n?", "", clean)
             clean = re.sub(r"\n?```$", "", clean)
-        return json.loads(clean)
+        result = _extract_json(raw)
+        track("linkedin", {"sid": sid})
+        return result
     except Exception:
         return {"raw": raw, "parse_error": True}
 
@@ -554,7 +607,7 @@ RESUME TEXT:
         if clean.startswith("```"):
             clean = re.sub(r"^```[a-z]*\n?", "", clean)
             clean = re.sub(r"\n?```$", "", clean)
-        data = json.loads(clean)
+        data = _extract_json(raw)
         track("builder_fill", {"sid": sid})
         return data
     except Exception:
@@ -644,12 +697,7 @@ Rules:
 
     raw = ask_ai(prompt)
     try:
-        clean = raw.strip()
-        if clean.startswith("```"):
-            clean = re.sub(r"^```[a-z]*\n?", "", clean)
-            clean = re.sub(r"\n?```$", "", clean)
-        track("linkedin", {"sid": sid})
-        return json.loads(clean)
+        return _extract_json(raw)
     except Exception:
         return {"raw": raw, "parse_error": True}
 

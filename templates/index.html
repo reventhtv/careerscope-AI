@@ -835,7 +835,12 @@
       <div class="panel" id="panel-guidance">
         <div class="panel-header">Learning <em>Guidance</em></div>
         <p class="desc">Curated courses based on your detected domain and career stage.</p>
-        <div id="courses-container"></div>
+        <div id="courses-container">
+          <div id="guidance-placeholder" style="text-align:center;padding:60px 20px;color:var(--text-muted);">
+            <div style="font-size:2rem;margin-bottom:12px;">📄</div>
+            <div style="font-family:var(--fm);font-size:.8rem;letter-spacing:1px;">Upload a resume to see personalised course recommendations</div>
+          </div>
+        </div>
       </div>
 
       <!-- ── BUILDER ── -->
@@ -2123,20 +2128,35 @@ async function aiSuggestBullets(idx) {
   const company = val(`exp-company-${idx}`);
   const box = elById(`exp-suggestions-${idx}`);
   if (!role) { showToast('Enter a job title first', true); return; }
-  box.innerHTML = '<div style="font-family:var(--fm);font-size:.7rem;color:var(--text-muted);">✦ Generating…</div>';
+  box.innerHTML = '<div style="font-family:var(--fm);font-size:.7rem;color:var(--text-muted);">✦ Generating bullets…</div>';
   box.classList.remove('hidden');
   try {
     const r = await fetch('/api/ai-resume-assist', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'suggest_bullets', context: role, extra: company })
     });
+    if (!r.ok) throw new Error(`Server error ${r.status}`);
     const d = await r.json();
-    if (d.bullets) {
+
+    // Try structured bullets first
+    if (d.bullets && Array.isArray(d.bullets) && d.bullets.length) {
       box.innerHTML = d.bullets.map(b => `<div class="ai-suggestion-item" onclick="insertBullet('exp-bullets-${idx}', this)">${escHtml(b)}</div>`).join('');
-    } else {
-      box.innerHTML = `<div style="font-family:var(--fm);font-size:.7rem;color:var(--orange);">Could not generate. Try again.</div>`;
+      return;
     }
-  } catch { box.innerHTML = '<div style="color:var(--orange);font-size:.75rem;">Error generating bullets.</div>'; }
+
+    // Fallback: try to extract from raw text if parse_error
+    if (d.raw) {
+      const lines = d.raw.split('\n').map(l => l.replace(/^[-•*\d.]+\s*/, '').trim()).filter(l => l.length > 20 && l.length < 300);
+      if (lines.length) {
+        box.innerHTML = lines.slice(0,4).map(b => `<div class="ai-suggestion-item" onclick="insertBullet('exp-bullets-${idx}', this)">${escHtml(b)}</div>`).join('');
+        return;
+      }
+    }
+
+    box.innerHTML = `<div style="font-family:var(--fm);font-size:.7rem;color:var(--orange);padding:6px;">AI returned unexpected format. Try again in a moment.</div>`;
+  } catch(err) {
+    box.innerHTML = `<div style="color:var(--orange);font-size:.75rem;padding:6px;">Error: ${escHtml(err.message)}. Please retry.</div>`;
+  }
 }
 
 async function aiSuggestProjBullets(idx) {
@@ -2151,11 +2171,21 @@ async function aiSuggestProjBullets(idx) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'suggest_bullets', context: name, extra: tech })
     });
+    if (!r.ok) throw new Error(`Server error ${r.status}`);
     const d = await r.json();
-    if (d.bullets) {
+    if (d.bullets && Array.isArray(d.bullets) && d.bullets.length) {
       box.innerHTML = d.bullets.map(b => `<div class="ai-suggestion-item" onclick="insertBullet('proj-bullets-${idx}', this)">${escHtml(b)}</div>`).join('');
+      return;
     }
-  } catch { box.innerHTML = '<div style="color:var(--orange);font-size:.75rem;">Error.</div>'; }
+    if (d.raw) {
+      const lines = d.raw.split('\n').map(l => l.replace(/^[-•*\d.]+\s*/, '').trim()).filter(l => l.length > 20);
+      if (lines.length) {
+        box.innerHTML = lines.slice(0,3).map(b => `<div class="ai-suggestion-item" onclick="insertBullet('proj-bullets-${idx}', this)">${escHtml(b)}</div>`).join('');
+        return;
+      }
+    }
+    box.innerHTML = '<div style="color:var(--orange);font-size:.75rem;padding:6px;">Unexpected response. Try again.</div>';
+  } catch(err) { box.innerHTML = `<div style="color:var(--orange);font-size:.75rem;padding:6px;">Error: ${escHtml(err.message)}</div>`; }
 }
 
 function insertBullet(listId, itemEl) {
@@ -2214,7 +2244,21 @@ async function aiGenerate(sectionType, idx) {
     if (sectionType === 'summary') {
       const f = elById('b-summary'); if (f) { f.value = d.content || ''; syncResume(); }
     } else if (sectionType === 'skills') {
-      const f = elById('b-skills-tech'); if (f) { f.value = d.content || ''; syncResume(); }
+      const f = elById('b-skills-tech');
+      if (f && d.content) {
+        const existing = f.value.trim();
+        const suggested = d.content.trim();
+        // Merge: keep existing, add new ones that aren't already listed
+        if (existing) {
+          const existingSet = new Set(existing.split(',').map(s => s.trim().toLowerCase()));
+          const newSkills = suggested.split(',').map(s => s.trim()).filter(s => s && !existingSet.has(s.toLowerCase()));
+          f.value = newSkills.length ? existing + ', ' + newSkills.join(', ') : existing;
+        } else {
+          f.value = suggested;
+        }
+        syncResume();
+        showToast('Skills merged ✓ — duplicates removed');
+      }
     } else if (sectionType === 'exp_description' && d.bullets) {
       const list = elById(`exp-bullets-${idx}`);
       if (list) {
@@ -2342,6 +2386,18 @@ function exportResumePDF() {
   const colorMap = { modern: '#1a237e', classic: '#111', minimal: '#999' };
   const accentColor = colorMap[rb.template] || '#111';
 
+  // Compute max bullets per job to keep within 2 pages
+  const expCount = rb.experience.length;
+  const maxBullets = expCount <= 2 ? 5 : expCount <= 3 ? 4 : expCount <= 5 ? 3 : 2;
+
+  // Render with bullet limit without mutating rb or the DOM
+  const savedExp = rb.experience.map(e => ({...e, bullets: [...(e.bullets||[])]}));
+  rb.experience = rb.experience.map(e => ({...e, bullets: (e.bullets||[]).slice(0, maxBullets)}));
+  const limitedHtml = rb.template === 'modern' ? renderModern()
+                     : rb.template === 'classic' ? renderClassic()
+                     : renderMinimal();   // render with bullet-limited rb
+  rb.experience = savedExp;               // restore full bullets immediately
+
   printWindow.document.write(`<!DOCTYPE html>
 <html>
 <head>
@@ -2349,59 +2405,62 @@ function exportResumePDF() {
   <title>${name} — Resume</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    @page { size: A4; margin: 0; }
-    body { font-family: 'Georgia', serif; background: white; }
-    .resume-doc { width: 210mm; min-height: 297mm; background: white; }
-    /* Modern */
-    .resume-modern { display: flex; min-height: 297mm; }
-    .rm-sidebar { width: 32%; background: ${accentColor === '#1a237e' ? '#1a237e' : '#2d3748'}; color: white; padding: 28px 18px; }
-    .rm-main { flex: 1; padding: 28px 22px; }
-    .rm-name { font-size: 22px; font-weight: 700; line-height: 1.1; margin-bottom: 4px; color: white; }
-    .rm-title { font-size: 11px; opacity: .85; margin-bottom: 18px; color: white; }
-    .rm-section-title { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; opacity: .7; margin: 14px 0 7px; padding-bottom: 3px; border-bottom: 1px solid rgba(255,255,255,.25); color: white; }
-    .rm-contact-item { font-size: 9px; opacity: .85; margin-bottom: 5px; word-break: break-all; color: white; }
-    .rm-skill-item { font-size: 9px; background: rgba(255,255,255,.18); border-radius: 3px; padding: 2px 7px; margin-bottom: 4px; display: inline-block; margin-right: 3px; color: white; }
-    .rm-main-title { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: ${accentColor}; font-weight: 700; margin: 13px 0 6px; padding-bottom: 3px; border-bottom: 2px solid ${accentColor}; }
-    .rm-summary { font-size: 10px; color: #333; line-height: 1.65; margin-bottom: 8px; }
-    .rm-exp-title { font-size: 11px; font-weight: 700; color: #111; }
-    .rm-exp-meta { font-size: 9px; color: #555; margin-bottom: 5px; }
-    .rm-bullet { font-size: 9.5px; color: #333; padding-left: 12px; position: relative; margin-bottom: 3px; }
-    .rm-bullet::before { content: '▸'; position: absolute; left: 0; color: ${accentColor}; font-size: 9px; }
-    .rm-entry { margin-bottom: 10px; }
-    /* Classic */
-    .resume-classic { padding: 28px 32px; }
-    .rc-header { text-align: center; border-bottom: 2px solid #111; padding-bottom: 12px; margin-bottom: 12px; }
-    .rc-name { font-size: 24px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
-    .rc-title { font-size: 11px; color: #444; margin: 4px 0; }
-    .rc-contacts { font-size: 9.5px; color: #555; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-top: 6px; }
-    .rc-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; border-bottom: 1px solid #111; margin: 12px 0 6px; padding-bottom: 3px; }
-    .rc-exp-title { font-size: 11px; font-weight: 700; }
-    .rc-exp-meta { font-size: 9.5px; color: #555; margin-bottom: 4px; display: flex; justify-content: space-between; }
-    .rc-bullet { font-size: 9.5px; color: #333; padding-left: 14px; position: relative; margin-bottom: 3px; }
+    @page { size: A4; margin: 14mm 14mm 14mm 14mm; }
+    body { font-family: 'Arial', sans-serif; background: white; color: #111; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .resume-doc { width: 100%; background: white; }
+
+    /* ── MODERN (two-column) ── */
+    .resume-modern { display: flex; min-height: calc(297mm - 28mm); }
+    .rm-sidebar { width: 30%; background: ${accentColor === '#1a237e' ? '#1a237e' : '#2d3748'} !important; color: white; padding: 20px 14px; flex-shrink: 0; }
+    .rm-main { flex: 1; padding: 20px 18px; }
+    .rm-name { font-size: 17px; font-weight: 700; line-height: 1.2; margin-bottom: 3px; color: white; }
+    .rm-title { font-size: 9px; opacity: .85; margin-bottom: 14px; color: white; letter-spacing: .5px; }
+    .rm-section-title { font-size: 8px; letter-spacing: 2px; text-transform: uppercase; opacity: .7; margin: 11px 0 5px; padding-bottom: 2px; border-bottom: 1px solid rgba(255,255,255,.25); color: white; }
+    .rm-contact-item { font-size: 8px; opacity: .85; margin-bottom: 4px; word-break: break-all; color: white; line-height: 1.3; }
+    .rm-skill-item { font-size: 8px; background: rgba(255,255,255,.18); border-radius: 3px; padding: 1px 5px; margin-bottom: 3px; display: inline-block; margin-right: 2px; color: white; }
+    .rm-main-title { font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: ${accentColor}; font-weight: 700; margin: 10px 0 5px; padding-bottom: 2px; border-bottom: 2px solid ${accentColor}; }
+    .rm-summary { font-size: 8.5px; color: #333; line-height: 1.55; margin-bottom: 7px; }
+    .rm-exp-title { font-size: 9.5px; font-weight: 700; color: #111; }
+    .rm-exp-meta { font-size: 8px; color: #555; margin-bottom: 4px; }
+    .rm-bullet { font-size: 8.5px; color: #333; padding-left: 11px; position: relative; margin-bottom: 2px; line-height: 1.4; }
+    .rm-bullet::before { content: '▸'; position: absolute; left: 0; color: ${accentColor}; font-size: 8px; }
+    .rm-entry { margin-bottom: 8px; page-break-inside: avoid; }
+
+    /* ── CLASSIC (single-column) ── */
+    .resume-classic { padding: 0; }
+    .rc-header { text-align: center; border-bottom: 2px solid #111; padding-bottom: 10px; margin-bottom: 10px; }
+    .rc-name { font-size: 20px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+    .rc-title { font-size: 9.5px; color: #444; margin: 3px 0; }
+    .rc-contacts { font-size: 8.5px; color: #555; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 5px; }
+    .rc-section-title { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; border-bottom: 1px solid #111; margin: 10px 0 5px; padding-bottom: 2px; }
+    .rc-exp-title { font-size: 9.5px; font-weight: 700; }
+    .rc-exp-meta { font-size: 8.5px; color: #555; margin-bottom: 3px; display: flex; justify-content: space-between; }
+    .rc-bullet { font-size: 8.5px; color: #333; padding-left: 13px; position: relative; margin-bottom: 2px; line-height: 1.4; }
     .rc-bullet::before { content: '•'; position: absolute; left: 4px; }
-    .rc-entry { margin-bottom: 9px; }
-    .rc-skills-row { font-size: 9.5px; color: #333; margin-bottom: 5px; }
-    /* Minimal */
-    .resume-minimal { padding: 36px 34px; }
-    .rmin-name { font-size: 26px; font-weight: 300; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 5px; }
-    .rmin-title { font-size: 11px; color: #777; letter-spacing: 1px; margin-bottom: 10px; }
-    .rmin-contacts { display: flex; gap: 16px; font-size: 9px; color: #888; flex-wrap: wrap; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #e0e0e0; }
-    .rmin-section-title { font-size: 9px; letter-spacing: 3px; text-transform: uppercase; color: #999; margin: 16px 0 8px; }
-    .rmin-summary { font-size: 10px; color: #444; line-height: 1.7; margin-bottom: 8px; }
-    .rmin-exp-title { font-size: 11px; font-weight: 600; color: #111; }
-    .rmin-exp-meta { font-size: 9px; color: #888; margin-bottom: 5px; }
-    .rmin-bullet { font-size: 9.5px; color: #444; padding-left: 12px; position: relative; margin-bottom: 3px; }
+    .rc-entry { margin-bottom: 7px; page-break-inside: avoid; }
+    .rc-skills-row { font-size: 8.5px; color: #333; margin-bottom: 4px; }
+
+    /* ── MINIMAL ── */
+    .resume-minimal { padding: 0; }
+    .rmin-name { font-size: 22px; font-weight: 300; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 4px; }
+    .rmin-title { font-size: 9.5px; color: #777; letter-spacing: 1px; margin-bottom: 8px; }
+    .rmin-contacts { display: flex; gap: 12px; font-size: 8px; color: #888; flex-wrap: wrap; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e0e0e0; }
+    .rmin-section-title { font-size: 8px; letter-spacing: 3px; text-transform: uppercase; color: #999; margin: 12px 0 6px; }
+    .rmin-summary { font-size: 8.5px; color: #444; line-height: 1.6; margin-bottom: 7px; }
+    .rmin-exp-title { font-size: 9.5px; font-weight: 600; color: #111; }
+    .rmin-exp-meta { font-size: 8px; color: #888; margin-bottom: 4px; }
+    .rmin-bullet { font-size: 8.5px; color: #444; padding-left: 11px; position: relative; margin-bottom: 2px; line-height: 1.4; }
     .rmin-bullet::before { content: '–'; position: absolute; left: 0; color: #aaa; }
-    .rmin-entry { margin-bottom: 10px; }
-    .rmin-skill-group { margin-bottom: 6px; font-size: 9.5px; }
+    .rmin-entry { margin-bottom: 8px; page-break-inside: avoid; }
+    .rmin-skill-group { margin-bottom: 5px; font-size: 8.5px; }
     .rmin-skill-cat { font-weight: 600; color: #111; }
     .rmin-skill-items { color: #555; }
   </style>
 </head>
-<body>${html}</body>
+<body>${limitedHtml}</body>
 </html>`);
   printWindow.document.close();
-  setTimeout(() => { printWindow.focus(); printWindow.print(); }, 600);
+  setTimeout(() => { printWindow.focus(); printWindow.print(); }, 700);
 }
 
 
@@ -2665,6 +2724,11 @@ function fullReset() {
   if (right) right.style.display = 'none';
   const preview = document.getElementById('resume-preview-content');
   if (preview) preview.innerHTML = '';
+
+  // Clear guidance so stale domain doesn't persist for new user
+  const coursesEl = document.getElementById('courses-container');
+  if (coursesEl) coursesEl.innerHTML = `<div id="guidance-placeholder" style="text-align:center;padding:60px 20px;color:var(--text-muted);"><div style="font-size:2rem;margin-bottom:12px;">📄</div><div style="font-family:var(--fm);font-size:.8rem;letter-spacing:1px;">Upload a resume to see personalised course recommendations</div></div>`;
+  detectedDomain = 'General / Other';
 
   showScreen('screen-upload');
 }
