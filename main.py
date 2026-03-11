@@ -526,48 +526,49 @@ RESUME:
 async def extract_resume(sid: str):
     """
     Parse the uploaded resume into structured JSON for the Resume Builder.
-    Uses a deterministic Python parser — no AI, no hallucination.
-    Falls back to AI only if pdfplumber extraction fails entirely.
+    Uses a deterministic Python parser — zero AI calls, zero hallucination.
+    Falls back to AI only if the deterministic parser itself crashes.
     """
-    if sid not in sessions:
-        raise HTTPException(status_code=404, detail="Session not found")
+    if sid not in _sessions:
+        raise HTTPException(status_code=404, detail="Session not found — please re-upload your resume.")
 
-    session = sessions[sid]
-    text    = session.get("text", "")
-
+    text = _sessions[sid].get("text", "")
     if not text or len(text.strip()) < 50:
-        raise HTTPException(status_code=400, detail="No resume text in session")
+        raise HTTPException(status_code=400, detail="No resume text found in session.")
 
+    # ── Primary: deterministic parser ──────────────────────────────
     try:
         from resume_parser import parse_resume
         data = parse_resume(text)
         track("builder_fill", {"sid": sid, "parser": "deterministic"})
         return data
     except Exception as exc:
-        # Fallback: AI parser (handles exotic formats the regex parser can't)
         import traceback
         traceback.print_exc()
         track("builder_fill_fallback", {"sid": sid, "error": str(exc)[:100]})
 
-        prompt = f"""Extract resume information into this exact JSON structure (no markdown):
-{{
-  "personal": {{"name":"","title":"","email":"","phone":"","location":"","linkedin":"","portfolio":"","website":""}},
-  "summary": "2 sentences max, under 60 words",
-  "experience": [{{"role":"","company":"","location":"","start":"Mon YYYY","end":"Mon YYYY or Present","bullets":["up to 5 bullets"]}}],
-  "education": [{{"institution":"","degree":"","field":"","year":"","gpa":""}}],
-  "skills": {{"tech":"comma-separated tech skills","soft":"comma-separated soft skills","tools":"comma-separated tools"}},
-  "projects": [{{"name":"","url":"","tech":"","bullets":[]}}],
-  "certifications": [{{"name":"","issuer":"","year":""}}]
-}}
-
-RESUME TEXT:
-{text[:5000]}"""
+    # ── Fallback: AI parser ─────────────────────────────────────────
+    try:
+        from ai_client import ask_ai
+        prompt = (
+            "Extract resume information into valid JSON only — no markdown, no explanation.\n"
+            "Structure:\n"
+            "{\n"
+            '  "personal": {"name":"","title":"","email":"","phone":"","location":"","linkedin":"","portfolio":"","website":""},\n'
+            '  "summary": "2 sentences, max 60 words",\n'
+            '  "experience": [{"role":"","company":"","location":"","start":"Mon YYYY","end":"Mon YYYY or Present","bullets":["bullet 1"]}],\n'
+            '  "education": [{"institution":"","degree":"","field":"","year":"","gpa":""}],\n'
+            '  "skills": {"tech":"comma-separated","soft":"comma-separated","tools":"comma-separated"},\n'
+            '  "projects": [],\n'
+            '  "certifications": [{"name":"","issuer":"","year":""}]\n'
+            "}\n\n"
+            f"RESUME TEXT:\n{text[:5000]}"
+        )
         raw = ask_ai(prompt)
-        try:
-            data = _extract_json(raw)
-            return data
-        except Exception:
-            return {{"parse_error": True, "raw": raw[:500]}}
+        data = _extract_json(raw)
+        return data
+    except Exception:
+        return {"parse_error": True, "message": "Could not parse resume — please fill in manually."}
 
 
 @app.post("/api/fill-bullets")

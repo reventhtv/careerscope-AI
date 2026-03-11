@@ -322,4 +322,27 @@ def parse_resume(raw_text: str) -> dict:
     sents = re.split(r'(?<=[.!?])\s+', result['summary'].strip())
     result['summary'] = ' '.join(sents[:2]).strip()
 
+
+    # ── 9. Post-process: Certifications — infer from summary if no section found ──
+    if not result['certifications']:
+        KNOWN_CERTS = {
+            'PMP':   ('Project Management Professional', 'PMI Institute'),
+            'PgMP':  ('Program Management Professional', 'PMI Institute'),
+            'CAPM':  ('Certified Associate in Project Management', 'PMI Institute'),
+            'CSM':   ('Certified Scrum Master', 'Scrum Alliance'),
+            'CSPO':  ('Certified Scrum Product Owner', 'Scrum Alliance'),
+            'CISSP': ('CISSP', 'ISC2'),
+        }
+        scan = result['personal'].get('title', '') + ' ' + result['summary']
+        added = set()
+        for abbr, (full_name, issuer) in KNOWN_CERTS.items():
+            if re.search(rf'\b{abbr}\b', scan) and abbr not in added:
+                added.add(abbr)
+                result['certifications'].append({'name': full_name, 'issuer': issuer, 'year': ''})
+        # Also scan raw_text directly for any we might have missed
+        for abbr, (full_name, issuer) in KNOWN_CERTS.items():
+            if abbr not in added and re.search(rf'\b{abbr}\b', raw_text):
+                added.add(abbr)
+                result['certifications'].append({'name': full_name, 'issuer': issuer, 'year': ''})
+
     return result

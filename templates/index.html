@@ -2622,11 +2622,15 @@ async function autoFillFromResume() {
 
   try {
     const r = await fetch(`/api/extract-resume/${sessionId}`);
+    if (!r.ok) {
+      const errText = await r.text();
+      throw new Error(`Server error ${r.status}: ${errText.slice(0, 100)}`);
+    }
     const d = await r.json();
 
     if (d.parse_error) {
       if (banner) banner.style.display = 'none';
-      showToast('Could not auto-fill — fill manually', true);
+      showToast('Could not auto-fill — please fill in manually', true);
       return;
     }
 
@@ -2753,6 +2757,7 @@ async function autoFillFromResume() {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sid: sessionId, role: exp.role, company: exp.company, start: exp.start, end: exp.end, existing_bullets: existing })
           });
+          if (!r2.ok) throw new Error(`fill-bullets ${r2.status}`);
           const d2 = await r2.json();
           if (d2.bullets?.length) {
             const list = elById(`exp-bullets-${i}`);
