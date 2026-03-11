@@ -533,73 +533,66 @@ async def extract_resume(sid: str):
     from ai_client import ask_ai
     text = _sessions[sid]["text"]
 
-    prompt = f"""You are a resume parser. Extract ALL information from this resume into structured JSON.
+    # Trim and annotate text for better AI parsing
+    # Mark bullet lines so AI can attribute them correctly
+    lines = text.split('\n')
+    annotated = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith('•') or (len(stripped) > 20 and stripped[0] == '-' and stripped[1] == ' '):
+            annotated.append(f"[BULLET] {stripped.lstrip('•- ')}")
+        else:
+            annotated.append(stripped)
+    annotated_text = '\n'.join(annotated)[:5500]
 
-Return ONLY valid JSON, no markdown, exactly this structure:
+    prompt = f"""You are an expert resume parser. Extract ALL information from this resume text into valid JSON.
+
+IMPORTANT: Many PDFs extract in column order — job titles first, then all bullet points at the bottom.
+You MUST read ALL the text and correctly assign bullet points to the right job.
+
+Return ONLY valid JSON (no markdown), exactly this structure:
 {{
   "personal": {{
-    "name": "full name",
-    "title": "current job title or headline",
-    "email": "email address",
-    "phone": "phone number",
-    "location": "city, state/country",
-    "linkedin": "linkedin url or username",
-    "portfolio": "github or portfolio url",
-    "website": "personal website if any"
+    "name": "", "title": "", "email": "", "phone": "",
+    "location": "", "linkedin": "", "portfolio": "", "website": ""
   }},
-  "summary": "professional summary or objective paragraph",
+  "summary": "max 2 sentences, under 60 words — distill the key value proposition only",
   "experience": [
     {{
-      "role": "job title",
+      "role": "exact job title from resume",
       "company": "company name",
       "location": "city",
       "start": "Mon YYYY",
       "end": "Mon YYYY or Present",
-      "bullets": ["bullet 1", "bullet 2", "bullet 3"]
+      "bullets": ["up to 5 bullet points attributed to THIS role only"]
     }}
   ],
   "education": [
-    {{
-      "institution": "university name",
-      "degree": "degree type e.g. B.Tech",
-      "field": "field of study",
-      "year": "graduation year",
-      "gpa": "GPA if mentioned"
-    }}
+    {{ "institution": "", "degree": "", "field": "", "year": "", "gpa": "" }}
   ],
   "skills": {{
-    "tech": "comma-separated technical skills",
-    "soft": "comma-separated soft skills and leadership skills",
-    "tools": "comma-separated tools and platforms"
+    "tech": "up to 15 comma-separated technical skills only",
+    "soft": "up to 8 comma-separated soft/leadership skills only",
+    "tools": "up to 10 comma-separated tools and platforms only"
   }},
   "projects": [
-    {{
-      "name": "project name",
-      "url": "project url if any",
-      "tech": "tech stack",
-      "bullets": ["highlight 1", "highlight 2"]
-    }}
+    {{ "name": "", "url": "", "tech": "", "bullets": ["up to 3 highlights"] }}
   ],
   "certifications": [
-    {{
-      "name": "certification name",
-      "issuer": "issuing organization",
-      "year": "year"
-    }}
+    {{ "name": "", "issuer": "", "year": "" }}
   ]
 }}
 
 Rules:
-- Extract ALL positions from experience, not just the most recent
-- Extract ALL education entries
-- Extract ALL projects mentioned
-- Keep bullet points as-is from the resume
-- If a field is not found, use empty string "" or empty array []
-- For skills: separate technical (programming, frameworks, protocols) from soft (leadership, communication) from tools (software, platforms)
-- Dates should be formatted as "Mon YYYY" e.g. "Jan 2022"
+- Summary: MAXIMUM 2 sentences, under 60 words total. Be concise.
+- Experience bullets: Assign each [BULLET] line to the most relevant role by topic/timeframe context. Max 5 bullets per role.
+- Skills: Keep only REAL skills from the resume — do NOT invent or pad.
+- If a bullet cannot be attributed to any role, omit it entirely.
+- Dates formatted as "Mon YYYY" e.g. "Jan 2022".
+- Return ONLY the JSON object, nothing else.
 
 RESUME TEXT:
-{text[:5000]}"""
+{annotated_text}"""
 
     raw = ask_ai(prompt)
     try:
@@ -700,6 +693,61 @@ Rules:
         return _extract_json(raw)
     except Exception:
         return {"raw": raw, "parse_error": True}
+
+
+@app.post("/api/fill-bullets")
+async def fill_bullets(payload: dict):
+    """
+    Given a job role and existing bullets, AI-generate enough to reach exactly 5.
+    payload = { sid, role, company, start, end, existing_bullets: [] }
+    Returns { bullets: [...exactly 5...] }
+    """
+    from ai_client import ask_ai
+
+    role     = payload.get("role", "")
+    company  = payload.get("company", "")
+    start    = payload.get("start", "")
+    end      = payload.get("end", "")
+    existing = payload.get("existing_bullets", [])
+
+    if not role:
+        raise HTTPException(status_code=400, detail="role is required")
+
+    # Already has 5+, just return trimmed
+    if len(existing) >= 5:
+        return {"bullets": existing[:5]}
+
+    needed = 5 - len(existing)
+    existing_text = "\n".join(f"- {b}" for b in existing) if existing else "None yet"
+
+    prompt = f"""You are an expert resume writer.
+
+Job: {role} at {company} ({start} – {end})
+
+Existing bullets (already written — do NOT repeat these):
+{existing_text}
+
+Write exactly {needed} NEW, UNIQUE bullet point(s) for this role.
+Each bullet must:
+- Start with a strong past-tense action verb
+- Be specific to the role/company context
+- Include a metric or quantifiable result where plausible (%, time, team size)
+- Be under 25 words
+- NOT duplicate any existing bullet above
+
+Return ONLY valid JSON, no markdown:
+{{"new_bullets": ["bullet 1", "bullet 2", ...]}}
+
+Generate exactly {needed} bullet(s)."""
+
+    raw = ask_ai(prompt)
+    try:
+        d = _extract_json(raw)
+        new_b = d.get("new_bullets", [])
+        combined = existing + new_b
+        return {"bullets": combined[:5]}
+    except Exception:
+        return {"bullets": existing}
 
 
 @app.post("/api/track-export/{sid}")
