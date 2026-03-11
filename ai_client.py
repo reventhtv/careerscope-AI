@@ -7,7 +7,7 @@ Set GEMINI_API_KEY in your Render dashboard (or local .env).
 import os
 
 API_KEY     = os.environ.get("GEMINI_API_KEY") or os.environ.get("AI_API_KEY") or os.environ.get("GENAI_API_KEY")
-GEMINI_MODEL = os.environ.get("AI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.environ.get("AI_MODEL", "gemini-1.5-flash")
 
 _client = None
 

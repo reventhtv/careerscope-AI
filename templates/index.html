@@ -2331,6 +2331,8 @@ function esc(s) { return escHtml(s || ''); }
 
 // ── PDF EXPORT ────────────────────────
 function exportResumePDF() {
+  // Ping analytics server
+  if (sessionId) fetch(`/api/track-export/${sessionId}`, { method: 'POST' }).catch(() => {});
   // Render the resume in a hidden print frame
   const html = elById('resume-preview-content')?.innerHTML || '';
   if (!html.trim()) { showToast('Fill in your resume first', true); return; }

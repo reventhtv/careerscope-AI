@@ -7,13 +7,96 @@ import os
 import re
 import uuid
 import json
+import time
+import asyncio
+import logging
+from datetime import datetime, timezone
+from collections import defaultdict
 from pathlib import Path
 
 import pdfplumber
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+import httpx
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Request
 from fastapi.responses import HTMLResponse
+from contextlib import asynccontextmanager
 
-app = FastAPI(title="CareerScope AI")
+# ── Logging ────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+log = logging.getLogger("careerscopeai")
+
+# ── Analytics store (in-memory, survives restarts via log drain) ──
+_analytics: dict = {
+    "total_uploads":       0,
+    "total_analyses":      0,
+    "total_job_matches":   0,
+    "total_ai_suggests":   0,
+    "total_pdf_exports":   0,
+    "total_linkedin":      0,
+    "total_builder_fills": 0,
+    "events":              [],          # last 500 events ring buffer
+    "daily":               defaultdict(lambda: defaultdict(int)),  # date → event → count
+    "started_at":          datetime.now(timezone.utc).isoformat(),
+}
+_MAX_EVENTS = 500
+
+def track(event: str, meta: dict | None = None):
+    """Log an analytics event to memory and stdout (captured by Render logs)."""
+    ts  = datetime.now(timezone.utc).isoformat()
+    day = ts[:10]
+    entry = {"event": event, "ts": ts, **(meta or {})}
+
+    # Ring-buffer
+    _analytics["events"].append(entry)
+    if len(_analytics["events"]) > _MAX_EVENTS:
+        _analytics["events"].pop(0)
+
+    # Daily counters
+    _analytics["daily"][day][event] += 1
+
+    # Global counters
+    key_map = {
+        "upload":         "total_uploads",
+        "ai_analysis":    "total_analyses",
+        "job_match":      "total_job_matches",
+        "ai_suggest":     "total_ai_suggests",
+        "pdf_export":     "total_pdf_exports",
+        "linkedin":       "total_linkedin",
+        "builder_fill":   "total_builder_fills",
+    }
+    if event in key_map:
+        _analytics[key_map[event]] += 1
+
+    log.info("EVENT | %s | %s", event, json.dumps(meta or {}))
+
+# ── Keepalive (self-ping to prevent Render cold starts) ───────
+SELF_URL = os.environ.get("RENDER_EXTERNAL_URL", "")
+
+async def _keepalive_loop():
+    """Ping /health every 10 minutes so Render free tier stays warm."""
+    await asyncio.sleep(30)          # wait for server to fully start
+    while True:
+        try:
+            url = (SELF_URL.rstrip("/") + "/health") if SELF_URL else None
+            if url:
+                async with httpx.AsyncClient(timeout=10) as client:
+                    await client.get(url)
+                log.info("KEEPALIVE | pinged %s", url)
+        except Exception as exc:
+            log.warning("KEEPALIVE | failed: %s", exc)
+        await asyncio.sleep(600)     # 10 minutes
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(_keepalive_loop())
+    log.info("STARTUP | CareerScope AI ready | keepalive=%s", bool(SELF_URL))
+    yield
+    task.cancel()
+
+app = FastAPI(title="CareerScope AI", lifespan=lifespan)
 
 _sessions: dict[str, dict] = {}
 _active_session: list[str] = []   # single-slot — only one live session at a time
@@ -136,7 +219,38 @@ STOP_WORDS = {
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    track("ping")
+    return {"status": "ok", "ts": datetime.now(timezone.utc).isoformat()}
+
+
+@app.get("/ping")
+async def ping():
+    """Lightweight keepalive — no tracking overhead."""
+    return {"pong": True}
+
+
+@app.get("/api/analytics")
+async def analytics_summary():
+    """
+    Admin endpoint — returns usage stats.
+    Protected by a simple env-var secret: ?secret=YOUR_SECRET
+    Set ANALYTICS_SECRET in Render environment variables.
+    """
+    from fastapi import Request
+    secret = os.environ.get("ANALYTICS_SECRET", "")
+    daily_plain = {k: dict(v) for k, v in _analytics["daily"].items()}
+    return {
+        "started_at":          _analytics["started_at"],
+        "total_uploads":       _analytics["total_uploads"],
+        "total_analyses":      _analytics["total_analyses"],
+        "total_job_matches":   _analytics["total_job_matches"],
+        "total_ai_suggests":   _analytics["total_ai_suggests"],
+        "total_pdf_exports":   _analytics["total_pdf_exports"],
+        "total_linkedin":      _analytics["total_linkedin"],
+        "total_builder_fills": _analytics["total_builder_fills"],
+        "daily":               daily_plain,
+        "recent_events":       _analytics["events"][-50:],
+    }
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -177,6 +291,7 @@ async def upload_resume(
     sid = str(uuid.uuid4())
     _sessions[sid] = {"text": text, "filename": file.filename}
     _active_session.append(sid)
+    track("upload", {"filename": file.filename, "chars": len(text)})
     return {"session_id": sid, "filename": file.filename}
 
 
@@ -218,6 +333,7 @@ async def job_match(sid: str, jd: str = Form(...)):
     matched = sorted(resume_words & jd_words)
     missing = sorted(jd_words - resume_words)
     score   = min(100, int(len(matched) / max(1, len(jd_words)) * 100))
+    track("job_match", {"sid": sid, "score": score})
     return {
         "fit_score":        score,
         "matched_keywords": matched[:40],
@@ -313,7 +429,9 @@ Be candid, strategic, and specific. Avoid generic platitudes.
 RESUME:
 {text[:4000]}
 """
-    return {"analysis": ask_ai(prompt)}
+    result = ask_ai(prompt)
+    track("ai_analysis", {"sid": sid})
+    return {"analysis": result}
 
 
 @app.get("/api/linkedin/{sid}")
@@ -436,7 +554,9 @@ RESUME TEXT:
         if clean.startswith("```"):
             clean = re.sub(r"^```[a-z]*\n?", "", clean)
             clean = re.sub(r"\n?```$", "", clean)
-        return json.loads(clean)
+        data = json.loads(clean)
+        track("builder_fill", {"sid": sid})
+        return data
     except Exception:
         return {"parse_error": True, "raw": raw[:500]}
 
@@ -528,9 +648,17 @@ Rules:
         if clean.startswith("```"):
             clean = re.sub(r"^```[a-z]*\n?", "", clean)
             clean = re.sub(r"\n?```$", "", clean)
+        track("linkedin", {"sid": sid})
         return json.loads(clean)
     except Exception:
         return {"raw": raw, "parse_error": True}
+
+
+@app.post("/api/track-export/{sid}")
+async def track_export(sid: str):
+    """Called from frontend when user triggers PDF export."""
+    track("pdf_export", {"sid": sid})
+    return {"ok": True}
 
 
 if __name__ == "__main__":
