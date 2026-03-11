@@ -525,174 +525,49 @@ RESUME:
 @app.get("/api/extract-resume/{sid}")
 async def extract_resume(sid: str):
     """
-    Extract structured data from uploaded resume text using AI.
-    Returns JSON matching the resume builder data model.
+    Parse the uploaded resume into structured JSON for the Resume Builder.
+    Uses a deterministic Python parser — no AI, no hallucination.
+    Falls back to AI only if pdfplumber extraction fails entirely.
     """
-    if sid not in _sessions:
-        raise HTTPException(status_code=404, detail="Session not found.")
-    from ai_client import ask_ai
-    text = _sessions[sid]["text"]
+    if sid not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
 
-    # Trim and annotate text for better AI parsing
-    # Mark bullet lines so AI can attribute them correctly
-    lines = text.split('\n')
-    annotated = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith('•') or (len(stripped) > 20 and stripped[0] == '-' and stripped[1] == ' '):
-            annotated.append(f"[BULLET] {stripped.lstrip('•- ')}")
-        else:
-            annotated.append(stripped)
-    annotated_text = '\n'.join(annotated)[:5500]
+    session = sessions[sid]
+    text    = session.get("text", "")
 
-    prompt = f"""You are an expert resume parser. Extract ALL information from this resume text into valid JSON.
+    if not text or len(text.strip()) < 50:
+        raise HTTPException(status_code=400, detail="No resume text in session")
 
-IMPORTANT: Many PDFs extract in column order — job titles first, then all bullet points at the bottom.
-You MUST read ALL the text and correctly assign bullet points to the right job.
+    try:
+        from resume_parser import parse_resume
+        data = parse_resume(text)
+        track("builder_fill", {"sid": sid, "parser": "deterministic"})
+        return data
+    except Exception as exc:
+        # Fallback: AI parser (handles exotic formats the regex parser can't)
+        import traceback
+        traceback.print_exc()
+        track("builder_fill_fallback", {"sid": sid, "error": str(exc)[:100]})
 
-Return ONLY valid JSON (no markdown), exactly this structure:
+        prompt = f"""Extract resume information into this exact JSON structure (no markdown):
 {{
-  "personal": {{
-    "name": "", "title": "", "email": "", "phone": "",
-    "location": "", "linkedin": "", "portfolio": "", "website": ""
-  }},
-  "summary": "max 2 sentences, under 60 words — distill the key value proposition only",
-  "experience": [
-    {{
-      "role": "exact job title from resume",
-      "company": "company name",
-      "location": "city",
-      "start": "Mon YYYY",
-      "end": "Mon YYYY or Present",
-      "bullets": ["up to 5 bullet points attributed to THIS role only"]
-    }}
-  ],
-  "education": [
-    {{ "institution": "", "degree": "", "field": "", "year": "", "gpa": "" }}
-  ],
-  "skills": {{
-    "tech": "up to 15 comma-separated technical skills only",
-    "soft": "up to 8 comma-separated soft/leadership skills only",
-    "tools": "up to 10 comma-separated tools and platforms only"
-  }},
-  "projects": [
-    {{ "name": "", "url": "", "tech": "", "bullets": ["up to 3 highlights"] }}
-  ],
-  "certifications": [
-    {{ "name": "", "issuer": "", "year": "" }}
-  ]
+  "personal": {{"name":"","title":"","email":"","phone":"","location":"","linkedin":"","portfolio":"","website":""}},
+  "summary": "2 sentences max, under 60 words",
+  "experience": [{{"role":"","company":"","location":"","start":"Mon YYYY","end":"Mon YYYY or Present","bullets":["up to 5 bullets"]}}],
+  "education": [{{"institution":"","degree":"","field":"","year":"","gpa":""}}],
+  "skills": {{"tech":"comma-separated tech skills","soft":"comma-separated soft skills","tools":"comma-separated tools"}},
+  "projects": [{{"name":"","url":"","tech":"","bullets":[]}}],
+  "certifications": [{{"name":"","issuer":"","year":""}}]
 }}
 
-Rules:
-- Summary: MAXIMUM 2 sentences, under 60 words total. Be concise.
-- Experience bullets: Assign each [BULLET] line to the most relevant role by topic/timeframe context. Max 5 bullets per role.
-- Skills: Keep only REAL skills from the resume — do NOT invent or pad.
-- If a bullet cannot be attributed to any role, omit it entirely.
-- Dates formatted as "Mon YYYY" e.g. "Jan 2022".
-- Return ONLY the JSON object, nothing else.
-
 RESUME TEXT:
-{annotated_text}"""
-
-    raw = ask_ai(prompt)
-    try:
-        clean = raw.strip()
-        if clean.startswith("```"):
-            clean = re.sub(r"^```[a-z]*\n?", "", clean)
-            clean = re.sub(r"\n?```$", "", clean)
-        data = _extract_json(raw)
-        track("builder_fill", {"sid": sid})
-        return data
-    except Exception:
-        return {"parse_error": True, "raw": raw[:500]}
-
-
-@app.post("/api/ai-resume-assist")
-async def ai_resume_assist(payload: dict):
-    """
-    Generic AI assist for resume builder.
-    payload = { action, context, section_type, extra }
-    actions: suggest_bullets | improve_text | generate_section | tailor_resume
-    """
-    from ai_client import ask_ai
-
-    action       = payload.get("action", "")
-    context      = payload.get("context", "")
-    section_type = payload.get("section_type", "")
-    extra        = payload.get("extra", "")
-
-    if action == "suggest_bullets":
-        prompt = f"""You are an expert resume writer.
-Generate exactly 3 strong, quantified resume bullet points for:
-Role: {context}
-Company/Context: {extra}
-
-Return ONLY valid JSON, no markdown:
-{{"bullets": ["bullet 1", "bullet 2", "bullet 3"]}}
-
-Rules:
-- Start each with a strong action verb
-- Include metrics/numbers where plausible (%, $, time saved, team size)
-- Keep each under 20 words
-- Be specific and impactful"""
-
-    elif action == "improve_text":
-        prompt = f"""You are an expert resume writer.
-Improve this resume text for section: {section_type}
-
-Original: {context}
-
-Return ONLY valid JSON, no markdown:
-{{"improved": "your improved version here", "reason": "brief explanation"}}
-
-Rules:
-- Make it more impactful, specific, and ATS-friendly
-- Use strong action verbs
-- Add quantification if possible
-- Keep similar length"""
-
-    elif action == "generate_section":
-        prompt = f"""You are an expert resume writer.
-Generate a complete {section_type} section for a resume.
-
-Context provided by user: {context}
-Additional info: {extra}
-
-Return ONLY valid JSON, no markdown:
-{{"content": "generated section content here"}}
-
-Rules:
-- Make it professional and ATS-optimized
-- Be specific to the context given
-- For summary: 3-4 impactful sentences
-- For skills: comma-separated grouped by category"""
-
-    elif action == "tailor_resume":
-        prompt = f"""You are an expert resume coach.
-Rewrite this resume summary/content to better match this job description.
-
-Current Resume Content:
-{context}
-
-Job Description:
-{extra}
-
-Return ONLY valid JSON, no markdown:
-{{"tailored": "rewritten content here", "keywords_added": ["kw1", "kw2", "kw3"]}}
-
-Rules:
-- Naturally incorporate JD keywords
-- Maintain authenticity - don't add skills they don't have
-- Make it more targeted and relevant"""
-
-    else:
-        raise HTTPException(status_code=400, detail=f"Unknown action: {action}")
-
-    raw = ask_ai(prompt)
-    try:
-        return _extract_json(raw)
-    except Exception:
-        return {"raw": raw, "parse_error": True}
+{text[:5000]}"""
+        raw = ask_ai(prompt)
+        try:
+            data = _extract_json(raw)
+            return data
+        except Exception:
+            return {{"parse_error": True, "raw": raw[:500]}}
 
 
 @app.post("/api/fill-bullets")
