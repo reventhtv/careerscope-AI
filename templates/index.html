@@ -552,20 +552,28 @@
 
     /* Classic template */
     .resume-classic { padding: 22px 24px; }
-    .rc-header { text-align: center; border-bottom: 2px solid #111; padding-bottom: 10px; margin-bottom: 10px; }
-    .rc-name { font-size: 20px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
-    .rc-title { font-size: 10px; color: #444; margin: 3px 0; }
-    .rc-contacts { font-size: 8.5px; color: #555; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 5px; }
-    .rc-section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; border-bottom: 1px solid #111; margin: 10px 0 5px; padding-bottom: 2px; }
-    .rc-exp-title { font-size: 10px; font-weight: 700; }
-    .rc-exp-meta { font-size: 8.5px; color: #555; margin-bottom: 3px; display: flex; justify-content: space-between; }
-    .rc-bullet { font-size: 8.5px; color: #333; padding-left: 12px; position: relative; margin-bottom: 2px; }
-    .rc-bullet::before { content: '•'; position: absolute; left: 3px; }
-    .rc-entry { margin-bottom: 7px; }
-    .rc-skills-row { font-size: 8.5px; color: #333; margin-bottom: 4px; }
-
-    /* Minimal template */
-    .resume-minimal { padding: 28px 26px; }
+    .rc2-hdr { text-align: center; border-bottom: 2px solid #1a1a1a; padding-bottom: 8px; margin-bottom: 9px; }
+    .rc2-name { font-size: 19px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #0d0d0d; line-height: 1.1; }
+    .rc2-title { font-size: 9.5px; color: #444; margin: 3px 0 5px; letter-spacing: .5px; font-style: italic; }
+    .rc2-contacts { display: flex; justify-content: center; flex-wrap: wrap; font-size: 8.5px; color: #333; gap: 0; }
+    .rc2-sep { margin: 0 7px; color: #aaa; }
+    .rc2-sec { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.8px; color: #0d0d0d; border-bottom: 1.5px solid #0d0d0d; margin: 10px 0 5px; padding-bottom: 2px; }
+    .rc2-sum-bul { font-size: 9px; color: #1a1a1a; padding-left: 11px; position: relative; margin-bottom: 3px; line-height: 1.5; }
+    .rc2-sum-bul::before { content: '•'; position: absolute; left: 1px; color: #333; }
+    .rc2-entry { margin-bottom: 9px; }
+    .rc2-role-bar { background: #eef2fb; border-left: 3px solid #2b4da8; padding: 3px 8px; font-size: 10px; font-weight: 700; color: #0d0d0d; margin-bottom: 3px; }
+    .rc2-co-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; }
+    .rc2-co { font-size: 9px; font-weight: 600; color: #222; }
+    .rc2-date { font-size: 8.5px; color: #444; white-space: nowrap; margin-left: 8px; }
+    .rc2-bul { font-size: 9px; color: #1a1a1a; display: flex; gap: 5px; margin-bottom: 2.5px; line-height: 1.45; padding-left: 2px; }
+    .rc2-dot { flex-shrink: 0; color: #555; line-height: 1.5; }
+    .rc2-edu { margin-bottom: 6px; }
+    .rc2-edu-row { display: flex; justify-content: space-between; align-items: baseline; }
+    .rc2-edu-deg { font-size: 9.5px; font-weight: 700; color: #0d0d0d; flex: 1; }
+    .rc2-inst { font-size: 8.5px; color: #555; margin-top: 1px; }
+    .rc2-skill { font-size: 9px; color: #1a1a1a; margin-bottom: 3px; line-height: 1.5; }
+    .rc2-skill-cat { font-weight: 700; color: #0d0d0d; }
+    .rc2-cert { font-size: 9px; color: #1a1a1a; margin-bottom: 2px; }
     .rmin-name { font-size: 22px; font-weight: 300; letter-spacing: 2px; text-transform: uppercase; color: #111; margin-bottom: 4px; }
     .rmin-title { font-size: 10px; color: #777; letter-spacing: 1px; margin-bottom: 8px; }
     .rmin-contacts { display: flex; gap: 14px; font-size: 8px; color: #888; flex-wrap: wrap; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid #e0e0e0; }
@@ -960,9 +968,12 @@
             <div class="builder-form">
               <div class="form-group">
                 <label class="form-label">Summary / Objective</label>
-                <textarea class="field-textarea" id="b-summary" rows="5" placeholder="Write a 3-4 sentence summary of your professional background, key strengths, and career goals..." oninput="syncResume()" style="min-height:120px;"></textarea>
+                <textarea class="field-textarea" id="b-summary" rows="5" placeholder="Write 3-4 summary bullets. In Classic template, each line becomes a bullet point.
+• Technical Program Manager with X years of experience...
+• Specialised in...
+• Proven track record in..." oninput="syncResume()" style="min-height:120px;"></textarea>
                 <div class="ai-assist-row">
-                  <button class="ai-mini-btn" onclick="aiGenerate('summary')">✦ Generate from profile</button>
+                  <button class="ai-mini-btn" onclick="aiGenerate('summary')" id="gen-summary-btn">✦ Generate from profile</button>
                   <button class="ai-mini-btn" onclick="aiImprove('b-summary', 'summary')">⟳ AI Improve</button>
                   <button class="ai-mini-btn" id="tailor-summary-btn" onclick="showTailorInput('summary')">◈ Tailor for Job</button>
                 </div>
@@ -2212,6 +2223,7 @@ async function aiImprove(fieldId, sectionType) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'improve_text', context: original, section_type: sectionType })
     });
+    if (!r.ok) throw new Error(`Server error ${r.status}`);
     const d = await r.json();
     field.value = d.improved || original;
     syncResume();
@@ -2224,31 +2236,42 @@ async function aiImprove(fieldId, sectionType) {
 
 async function aiGenerate(sectionType, idx) {
   let context = '', extra = '';
+
+  // Determine button to show loading state
+  let btn = null;
   if (sectionType === 'summary') {
-    context = [val('b-name'), val('b-title'), rb.experience.slice(0,2).map(e => `${e.role} at ${e.company}`).join(', ')].filter(Boolean).join('. ');
+    btn = document.getElementById('gen-summary-btn');
+    syncResume(); // ensure rb is fresh
+    context = [val('b-name'), val('b-title'), rb.experience.slice(0,2).map(e => `${e.role} at ${e.company}`).filter(Boolean).join(', ')].filter(Boolean).join('. ');
     extra = rb.skills.tech;
   } else if (sectionType === 'skills') {
-    context = [val('b-title'), rb.experience.map(e => e.role).join(', ')].filter(Boolean).join('. ');
+    syncResume();
+    context = [val('b-title'), rb.experience.map(e => e.role).filter(Boolean).join(', ')].filter(Boolean).join('. ');
   } else if (sectionType === 'exp_description') {
     const role = val(`exp-role-${idx}`);
     const company = val(`exp-company-${idx}`);
     context = `${role} at ${company}`;
   }
 
+  if (btn) { btn.disabled = true; btn.textContent = '✦ Generating…'; }
+
   try {
     const r = await fetch('/api/ai-resume-assist', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'generate_section', context, section_type: sectionType, extra })
     });
+    if (!r.ok) throw new Error(`Server error ${r.status}`);
     const d = await r.json();
+
     if (sectionType === 'summary') {
-      const f = elById('b-summary'); if (f) { f.value = d.content || ''; syncResume(); }
+      const f = elById('b-summary');
+      if (f && d.content) { f.value = d.content; syncResume(); showToast('Summary generated ✓'); }
+      else showToast('No content returned — try again', true);
     } else if (sectionType === 'skills') {
       const f = elById('b-skills-tech');
       if (f && d.content) {
         const existing = f.value.trim();
         const suggested = d.content.trim();
-        // Merge: keep existing, add new ones that aren't already listed
         if (existing) {
           const existingSet = new Set(existing.split(',').map(s => s.trim().toLowerCase()));
           const newSkills = suggested.split(',').map(s => s.trim()).filter(s => s && !existingSet.has(s.toLowerCase()));
@@ -2270,10 +2293,14 @@ async function aiGenerate(sectionType, idx) {
           list.appendChild(row);
         });
         syncResume();
+        showToast('Bullets generated ✓');
       }
     }
-    showToast('Generated ✓');
-  } catch { showToast('Generation failed', true); }
+  } catch(err) {
+    showToast('Generation failed: ' + err.message, true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '✦ Generate from profile'; }
+  }
 }
 
 function showTailorInput(section) {
@@ -2292,6 +2319,7 @@ async function tailorSection(fieldId, jdFieldId) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'tailor_resume', context: original, extra: jdField.value })
     });
+    if (!r.ok) throw new Error(`Server error ${r.status}`);
     const d = await r.json();
     field.value = d.tailored || original;
     syncResume();
@@ -2339,19 +2367,46 @@ function renderModern() {
 
 function renderClassic() {
   const p = rb.personal;
-  const contacts = [p.email, p.phone, p.location, p.linkedin].filter(Boolean);
+  const contacts = [];
+  if (p.email)    contacts.push(`✉ ${esc(p.email)}`);
+  if (p.phone)    contacts.push(`✆ ${esc(p.phone)}`);
+  if (p.location) contacts.push(`📍 ${esc(p.location)}`);
+  if (p.linkedin) contacts.push(`🔗 ${esc(p.linkedin)}`);
+
+  // Summary bullets: split by • or newline
+  const sumBullets = rb.summary
+    ? rb.summary.split(/[•\n]/).map(l=>l.trim()).filter(l=>l.length>5)
+    : [];
+
   return `<div class="resume-doc resume-classic">
-    <div class="rc-header">
-      <div class="rc-name">${esc(p.name) || 'YOUR NAME'}</div>
-      ${p.title ? `<div class="rc-title">${esc(p.title)}</div>` : ''}
-      <div class="rc-contacts">${contacts.map(c => `<span>${esc(c)}</span>`).join('<span>·</span>')}</div>
+    <div class="rc2-hdr">
+      <div class="rc2-name">${esc(p.name)||'YOUR NAME'}</div>
+      ${p.title?`<div class="rc2-title">${esc(p.title)}</div>`:''}
+      <div class="rc2-contacts">${contacts.map((c,i)=>`${i?'<span class="rc2-sep">|</span>':''}${c}`).join('')}</div>
     </div>
-    ${rb.summary ? `<div class="rc-section-title">Professional Summary</div><div style="font-size:8.5px;color:#333;line-height:1.6;margin-bottom:6px;">${esc(rb.summary)}</div>` : ''}
-    ${rb.experience.length ? `<div class="rc-section-title">Experience</div>${rb.experience.map(e => `<div class="rc-entry"><div class="rc-exp-title">${esc(e.role)}</div><div class="rc-exp-meta"><span>${esc(e.company)}${e.location ? ` · ${esc(e.location)}` : ''}</span><span>${e.start ? `${esc(e.start)} – ${esc(e.end)}` : ''}</span></div>${e.bullets.map(b => `<div class="rc-bullet">${esc(b)}</div>`).join('')}</div>`).join('')}` : ''}
-    ${rb.education.length ? `<div class="rc-section-title">Education</div>${rb.education.map(e => `<div class="rc-entry"><div class="rc-exp-title">${esc(e.degree)}${e.field ? ` – ${esc(e.field)}` : ''}</div><div class="rc-exp-meta"><span>${esc(e.institution)}</span><span>${e.year || ''}</span></div>${e.gpa ? `<div style="font-size:8px;color:#555;">GPA: ${esc(e.gpa)}</div>` : ''}</div>`).join('')}` : ''}
-    ${rb.skills.tech || rb.skills.soft ? `<div class="rc-section-title">Skills</div>${rb.skills.tech ? `<div class="rc-skills-row"><strong>Technical:</strong> ${esc(rb.skills.tech)}</div>` : ''}${rb.skills.soft ? `<div class="rc-skills-row"><strong>Soft Skills:</strong> ${esc(rb.skills.soft)}</div>` : ''}${rb.skills.tools ? `<div class="rc-skills-row"><strong>Tools:</strong> ${esc(rb.skills.tools)}</div>` : ''}` : ''}
-    ${rb.projects.length ? `<div class="rc-section-title">Projects</div>${rb.projects.map(p => `<div class="rc-entry"><div class="rc-exp-title">${esc(p.name)}${p.url ? ` <span style="font-weight:400;font-size:8px;color:#555;">${esc(p.url)}</span>` : ''}</div>${p.tech ? `<div style="font-size:8px;color:#555;margin-bottom:2px;">${esc(p.tech)}</div>` : ''}${p.bullets.map(b => `<div class="rc-bullet">${esc(b)}</div>`).join('')}</div>`).join('')}` : ''}
-    ${rb.certifications.length ? `<div class="rc-section-title">Certifications</div>${rb.certifications.map(c => `<div style="font-size:8.5px;margin-bottom:3px;"><strong>${esc(c.name)}</strong>${c.issuer ? ` · ${esc(c.issuer)}` : ''}${c.year ? ` · ${esc(c.year)}` : ''}</div>`).join('')}` : ''}
+    ${sumBullets.length?`<div class="rc2-sec">Summary</div>${sumBullets.map(l=>`<div class="rc2-sum-bul">${esc(l)}</div>`).join('')}`:''}
+    ${rb.experience.length?`<div class="rc2-sec">Professional Experience</div>${rb.experience.filter(e=>e.role).map(e=>`
+      <div class="rc2-entry">
+        <div class="rc2-role-bar">${esc(e.role)}</div>
+        <div class="rc2-co-row">
+          <span class="rc2-co">${esc(e.company)}${e.location?' · '+esc(e.location):''}</span>
+          <span class="rc2-date">${e.start?esc(e.start)+' – '+esc(e.end||'Present'):''}</span>
+        </div>
+        ${e.bullets.map(b=>`<div class="rc2-bul"><span class="rc2-dot">–</span><span>${esc(b)}</span></div>`).join('')}
+      </div>`).join('')}`:''}
+    ${rb.education.length?`<div class="rc2-sec">Education</div>${rb.education.filter(e=>e.institution).map(e=>`
+      <div class="rc2-edu">
+        <div class="rc2-edu-row">
+          <span class="rc2-edu-deg">${esc(e.degree)}${e.field?' – '+esc(e.field):''}</span>
+          <span class="rc2-date">${e.year||''}${e.gpa?' · GPA '+esc(e.gpa):''}</span>
+        </div>
+        <div class="rc2-inst">${esc(e.institution)}</div>
+      </div>`).join('')}`:''}
+    ${rb.skills.tech||rb.skills.soft?`<div class="rc2-sec">Skills</div>
+      ${rb.skills.tech?`<div class="rc2-skill"><span class="rc2-skill-cat">Technical: </span>${esc(rb.skills.tech)}</div>`:''}
+      ${rb.skills.soft?`<div class="rc2-skill"><span class="rc2-skill-cat">Leadership & Delivery: </span>${esc(rb.skills.soft)}</div>`:''}
+      ${rb.skills.tools?`<div class="rc2-skill"><span class="rc2-skill-cat">Domains: </span>${esc(rb.skills.tools)}</div>`:''}`:''}
+    ${rb.certifications.length?`<div class="rc2-sec">Certifications</div>${rb.certifications.map(c=>`<div class="rc2-cert"><strong>${esc(c.name)}</strong>${c.issuer?' · '+esc(c.issuer):''}${c.year?' · '+esc(c.year):''}</div>`).join('')}`:''}
   </div>`;
 }
 
@@ -2366,7 +2421,7 @@ function renderMinimal() {
     ${rb.experience.length ? `<div class="rmin-section-title">Experience</div>${rb.experience.map(e => `<div class="rmin-entry"><div class="rmin-exp-title">${esc(e.role)} — ${esc(e.company)}</div><div class="rmin-exp-meta">${[e.location, e.start ? `${e.start} – ${e.end}` : ''].filter(Boolean).join(' · ')}</div>${e.bullets.map(b => `<div class="rmin-bullet">${esc(b)}</div>`).join('')}</div>`).join('')}` : ''}
     ${rb.skills.tech ? `<div class="rmin-section-title">Skills</div><div class="rmin-skill-group"><span class="rmin-skill-items">${esc(rb.skills.tech)}</span></div>${rb.skills.soft ? `<div class="rmin-skill-group"><span class="rmin-skill-cat">Leadership: </span><span class="rmin-skill-items">${esc(rb.skills.soft)}</span></div>` : ''}${rb.skills.tools ? `<div class="rmin-skill-group"><span class="rmin-skill-cat">Tools: </span><span class="rmin-skill-items">${esc(rb.skills.tools)}</span></div>` : ''}` : ''}
     ${rb.projects.length ? `<div class="rmin-section-title">Projects</div>${rb.projects.map(p => `<div class="rmin-entry"><div class="rmin-exp-title">${esc(p.name)}${p.tech ? ` <span style="font-weight:400;color:#888;"> · ${esc(p.tech)}</span>` : ''}</div>${p.bullets.map(b => `<div class="rmin-bullet">${esc(b)}</div>`).join('')}</div>`).join('')}` : ''}
-    ${rb.education.length ? `<div class="rmin-section-title">Education</div>${rb.education.map(e => `<div class="rmin-entry"><div class="rmin-exp-title">${esc(e.degree)}${e.field ? `, ${esc(e.field)}` : ''}</div><div class="rmin-exp-meta">${esc(e.institution)}${e.year ? ` · ${esc(e.year)}` : ''}</div></div>`).join('')}` : ''}
+    ${rb.education.length ? `<div class="rmin-section-title">Education</div>${rb.education.map(e => `<div class="rmin-entry"><div class="rmin-exp-title">${esc(e.degree)}${e.field ? `, ${esc(e.field)}` : ''}</div><div class="rmin-exp-meta">${esc(e.institution)}${e.year ? ` · ${esc(e.year)}` : ''}${e.gpa ? ' · GPA ' + esc(e.gpa) : ''}</div></div>`).join('')}` : ''}
     ${rb.certifications.length ? `<div class="rmin-section-title">Certifications</div>${rb.certifications.map(c => `<div style="font-size:8.5px;margin-bottom:3px;color:#444;">${esc(c.name)}${c.issuer ? ` · ${esc(c.issuer)}` : ''}${c.year ? ` · ${esc(c.year)}` : ''}</div>`).join('')}` : ''}
   </div>`;
 }
@@ -2459,9 +2514,9 @@ function buildPDFHtml(s, accent, sidebarBg) {
           <div class="m-entry">
             <div class="m-exp-row">
               <div class="m-exp-title">${x(e.degree||'')}${e.field?' – '+x(e.field):''}</div>
-              <div class="m-exp-date">${x(e.year||'')}</div>
+              <div class="m-exp-date">${x(e.year||'')}${e.gpa?' · GPA '+x(e.gpa):''}</div>
             </div>
-            <div class="m-exp-company">${x(e.institution||'')}${e.gpa?' · GPA '+x(e.gpa):''}</div>
+            <div class="m-exp-company">${x(e.institution||'')}</div>
           </div>`).join('')}` : ''}
         ${s.projects.length ? `<div class="m-section-title">PROJECTS</div>${s.projects.filter(p=>p.name).map(p=>`
           <div class="m-entry">
@@ -2473,11 +2528,11 @@ function buildPDFHtml(s, accent, sidebarBg) {
     return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${x(p.name)} — Resume</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-@page{size:A4;margin:12mm 12mm 12mm 12mm}
-body{font-family:Arial,Helvetica,sans-serif;background:white;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:8.5px}
-.wrap{display:flex;width:100%;min-height:calc(297mm - 24mm)}
-.sidebar{width:29%;background:${sidebarBg} !important;color:#fff;padding:18px 13px;flex-shrink:0}
-.main{flex:1;padding:18px 16px;border-left:none}
+@page{size:A4;margin:0}
+body{font-family:Calibri,'Segoe UI',Arial,sans-serif;background:white;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:8.5px}
+.wrap{display:flex;width:100%;min-height:297mm;padding:0}
+.sidebar{width:29%;background:${sidebarBg} !important;color:#fff;padding:16px 12px;flex-shrink:0;box-sizing:border-box}
+.main{flex:1;padding:16px 15px;border-left:none;box-sizing:border-box}
 .s-name{font-size:15px;font-weight:700;line-height:1.2;margin-bottom:3px;word-break:break-word}
 .s-title{font-size:8px;opacity:.8;margin-bottom:10px;line-height:1.4}
 .s-divider{height:1px;background:rgba(255,255,255,.25);margin:8px 0}
@@ -2487,70 +2542,83 @@ body{font-family:Arial,Helvetica,sans-serif;background:white;color:#111;-webkit-
 .m-section-title{font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:${accent};border-bottom:1.5px solid ${accent};padding-bottom:3px;margin:0 0 8px;margin-top:12px}
 .m-section-title:first-child{margin-top:0}
 .m-summary{font-size:8px;color:#333;line-height:1.6;margin-bottom:2px}
-.m-entry{margin-bottom:9px;page-break-inside:avoid}
+.m-entry{margin-bottom:9px;break-inside:avoid;page-break-inside:avoid}
 .m-exp-row{display:flex;justify-content:space-between;align-items:baseline}
 .m-exp-title{font-size:9px;font-weight:700;color:#111;flex:1}
 .m-exp-date{font-size:7.5px;color:#555;white-space:nowrap;margin-left:8px}
 .m-exp-company{font-size:7.5px;color:#555;margin-bottom:4px}
-.m-bullet{font-size:7.5px;color:#333;padding-left:12px;position:relative;margin-bottom:2.5px;line-height:1.45}
-.m-bullet-dot{position:absolute;left:0;color:${accent};font-size:7px}
+.m-bullet{font-size:7.5px;color:#333;display:flex;gap:5px;margin-bottom:2px;line-height:1.4}
+.m-bullet-dot{color:${accent};font-size:7px;flex-shrink:0;line-height:1.5}
 </style></head><body><div class="wrap">${sidebarHtml}${mainHtml}</div></body></html>`;
   }
 
   /* ── CLASSIC template ── */
   if (s.template === 'classic') {
-    const contacts = [p.email, p.phone, p.location, p.linkedin].filter(Boolean);
+    const contacts = [];
+    if (p.email)    contacts.push(`✉ ${x(p.email)}`);
+    if (p.phone)    contacts.push(`✆ ${x(p.phone)}`);
+    if (p.location) contacts.push(`📍 ${x(p.location)}`);
+    if (p.linkedin) contacts.push(`🔗 ${x(p.linkedin)}`);
+
     return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${x(p.name)} — Resume</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-@page{size:A4;margin:14mm 16mm 14mm 16mm}
-body{font-family:'Georgia',serif;background:white;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:8.5px;line-height:1.5}
-.header{text-align:center;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:12px}
-.c-name{font-size:19px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;font-family:Arial,sans-serif}
-.c-title{font-size:9px;color:#555;margin:3px 0;letter-spacing:.5px}
-.c-contacts{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;font-size:8px;color:#444;margin-top:5px}
-.c-contacts span::before{content:'·';margin-right:10px}
-.c-contacts span:first-child::before{content:''}
-.section-title{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;border-bottom:1.5px solid #111;margin:11px 0 6px;padding-bottom:2px;color:#111}
-.c-entry{margin-bottom:8px;page-break-inside:avoid}
-.c-exp-row{display:flex;justify-content:space-between;align-items:baseline}
-.c-exp-title{font-size:9px;font-weight:700;flex:1}
-.c-exp-date{font-size:7.5px;color:#555;margin-left:8px;white-space:nowrap}
-.c-exp-company{font-size:7.5px;color:#555;margin-bottom:4px}
-.c-bullet{font-size:7.5px;color:#333;padding-left:14px;position:relative;margin-bottom:2.5px;line-height:1.45}
-.c-bullet::before{content:'•';position:absolute;left:4px;color:#333}
-.c-summary{font-size:8px;color:#333;line-height:1.65;margin-bottom:4px}
-.c-skills-block{font-size:7.5px;color:#333;margin-bottom:4px;line-height:1.5}
-.c-skills-block strong{color:#111}
-.c-cert{font-size:7.5px;color:#333;margin-bottom:3px}
+@page{size:A4;margin:0}
+body{font-family:Calibri,'Segoe UI',Arial,sans-serif;background:#fff;color:#1a1a1a;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:8.8px;line-height:1.5;padding:12mm 14mm 12mm 14mm}
+.hdr{text-align:center;padding-bottom:9px;margin-bottom:10px;border-bottom:2px solid #1a1a1a}
+.hdr-name{font-size:22px;font-weight:700;letter-spacing:2px;text-transform:uppercase;font-family:Calibri,'Segoe UI',Arial,sans-serif;color:#0d0d0d;line-height:1.1}
+.hdr-title{font-size:9px;color:#444;margin:3px 0 6px;letter-spacing:.5px;font-style:italic}
+.hdr-contacts{display:flex;justify-content:center;flex-wrap:wrap;font-size:8px;color:#333}
+.hdr-sep{margin:0 7px;color:#aaa}
+.sec{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.8px;color:#0d0d0d;border-bottom:1.5px solid #0d0d0d;margin:10px 0 5px;padding-bottom:2px}
+.sum-bullet{font-size:8.8px;color:#1a1a1a;padding-left:11px;position:relative;margin-bottom:3px;line-height:1.5}
+.sum-bullet::before{content:'•';position:absolute;left:1px;color:#333}
+.exp-entry{margin-bottom:9px;break-inside:avoid;page-break-inside:avoid}
+.role-bar{background:#eef2fb;border-left:3px solid #2b4da8;padding:2.5px 7px;font-size:9.5px;font-weight:700;color:#0d0d0d;margin-bottom:3px}
+.co-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:1px}
+.co-name{font-size:8.5px;font-weight:600;color:#222}
+.co-date{font-size:8px;color:#444;white-space:nowrap;margin-left:8px}
+.domain-tag{font-size:7.5px;color:#666;font-style:italic;margin-bottom:3px}
+.bul{font-size:8.5px;color:#1a1a1a;display:flex;gap:5px;margin-bottom:2.5px;line-height:1.45;padding-left:2px}
+.bul-dot{flex-shrink:0;color:#555;line-height:1.5}
+.edu-entry{margin-bottom:6px;break-inside:avoid}
+.edu-row{display:flex;justify-content:space-between;align-items:baseline}
+.edu-deg{font-size:9px;font-weight:700;color:#0d0d0d;flex:1}
+.edu-yr{font-size:8px;color:#444;white-space:nowrap;margin-left:8px}
+.edu-inst{font-size:8px;color:#555;margin-top:1px}
+.skill-line{font-size:8.5px;color:#1a1a1a;margin-bottom:3px;line-height:1.5}
+.skill-cat{font-weight:700;color:#0d0d0d}
+.cert-line{font-size:8.5px;color:#1a1a1a;margin-bottom:2px}
 </style></head><body>
-<div class="header">
-  <div class="c-name">${x(p.name)||'YOUR NAME'}</div>
-  ${p.title?`<div class="c-title">${x(p.title)}</div>`:''}
-  <div class="c-contacts">${contacts.map(c=>`<span>${x(c)}</span>`).join('')}</div>
+<div class="hdr">
+  <div class="hdr-name">${x(p.name)||'YOUR NAME'}</div>
+  ${p.title?`<div class="hdr-title">${x(p.title)}</div>`:''}
+  <div class="hdr-contacts">${contacts.map((c,i)=>`${i?'<span class="hdr-sep">|</span>':''}${c}`).join('')}</div>
 </div>
-${s.summary?`<div class="section-title">Professional Summary</div><div class="c-summary">${x(s.summary)}</div>`:''}
-${s.experience.filter(e=>e.role).length?`<div class="section-title">Experience</div>${s.experience.filter(e=>e.role).map(e=>`
-<div class="c-entry">
-  <div class="c-exp-row"><div class="c-exp-title">${x(e.role)}</div><div class="c-exp-date">${x(e.start||'')}${e.end?' – '+x(e.end):''}</div></div>
-  <div class="c-exp-company">${x(e.company||'')}${e.location?' · '+x(e.location):''}</div>
-  ${(e.bullets||[]).filter(b=>b.trim()).map(b=>`<div class="c-bullet">${x(b)}</div>`).join('')}
+${s.summary?`<div class="sec">Summary</div>
+${s.summary.split(/[•\n]/).map(l=>l.trim()).filter(l=>l.length>5).map(l=>`<div class="sum-bullet">${x(l)}</div>`).join('')}`:''}
+${s.experience.filter(e=>e.role).length?`<div class="sec">Professional Experience</div>
+${s.experience.filter(e=>e.role).map(e=>`<div class="exp-entry">
+  <div class="role-bar">${x(e.role)}</div>
+  <div class="co-row"><span class="co-name">${x(e.company||'')}${e.location?' · '+x(e.location):''}</span><span class="co-date">${x(e.start||'')}${e.end?' – '+x(e.end):''}</span></div>
+  ${(e.bullets||[]).filter(b=>b.trim()).map(b=>`<div class="bul"><span class="bul-dot">–</span><span>${x(b)}</span></div>`).join('')}
 </div>`).join('')}`:''}
-${s.education.filter(e=>e.institution).length?`<div class="section-title">Education</div>${s.education.filter(e=>e.institution).map(e=>`
-<div class="c-entry">
-  <div class="c-exp-row"><div class="c-exp-title">${x(e.degree||'')}${e.field?' – '+x(e.field):''}</div><div class="c-exp-date">${x(e.year||'')}</div></div>
-  <div class="c-exp-company">${x(e.institution||'')}${e.gpa?' · GPA '+x(e.gpa):''}</div>
+${s.education.filter(e=>e.institution).length?`<div class="sec">Education</div>
+${s.education.filter(e=>e.institution).map(e=>`<div class="edu-entry">
+  <div class="edu-row"><span class="edu-deg">${x(e.degree||'')}${e.field?' – '+x(e.field):''}</span><span class="edu-yr">${x(e.year||'')}${e.gpa?' · GPA '+x(e.gpa):''}</span></div>
+  <div class="edu-inst">${x(e.institution||'')}</div>
 </div>`).join('')}`:''}
-${(s.skills.tech||s.skills.soft)?`<div class="section-title">Skills</div>
-${s.skills.tech?`<div class="c-skills-block"><strong>Technical:</strong> ${x((s.skills.tech||'').split(',').slice(0,15).join(', '))}</div>`:''}
-${s.skills.soft?`<div class="c-skills-block"><strong>Leadership:</strong> ${x(s.skills.soft)}</div>`:''}
-${s.skills.tools?`<div class="c-skills-block"><strong>Tools:</strong> ${x(s.skills.tools)}</div>`:''}`:''}
-${s.projects.filter(p=>p.name).length?`<div class="section-title">Projects</div>${s.projects.filter(p=>p.name).map(p=>`
-<div class="c-entry">
-  <div class="c-exp-title">${x(p.name)}${p.tech?` <span style="font-weight:400;font-size:7.5px;color:#555;">${x(p.tech)}</span>`:''}</div>
-  ${(p.bullets||[]).filter(b=>b.trim()).map(b=>`<div class="c-bullet">${x(b)}</div>`).join('')}
+${(s.skills.tech||s.skills.soft||s.skills.tools)?`<div class="sec">Skills</div>
+${s.skills.tech?`<div class="skill-line"><span class="skill-cat">Technical: </span>${x((s.skills.tech||'').split(',').slice(0,15).join(', '))}</div>`:''}
+${s.skills.soft?`<div class="skill-line"><span class="skill-cat">Leadership & Delivery: </span>${x(s.skills.soft)}</div>`:''}
+${s.skills.tools?`<div class="skill-line"><span class="skill-cat">Domains: </span>${x(s.skills.tools)}</div>`:''}`:''}
+${s.projects.filter(p=>p.name).length?`<div class="sec">Projects</div>
+${s.projects.filter(p=>p.name).map(p=>`<div class="exp-entry">
+  <div class="role-bar">${x(p.name)}${p.tech?' <span style="font-weight:400;font-size:7.5px;">('+x(p.tech)+')</span>':''}</div>
+  ${(p.bullets||[]).filter(b=>b.trim()).map(b=>`<div class="bul"><span class="bul-dot">–</span><span>${x(b)}</span></div>`).join('')}
 </div>`).join('')}`:''}
-${s.certifications.filter(c=>c.name).length?`<div class="section-title">Certifications</div>${s.certifications.filter(c=>c.name).map(c=>`<div class="c-cert"><strong>${x(c.name)}</strong>${c.issuer?' · '+x(c.issuer):''}${c.year?' · '+x(c.year):''}</div>`).join('')}`:''}
+${s.certifications.filter(c=>c.name).length?`<div class="sec">Certifications</div>
+${s.certifications.filter(c=>c.name).map(c=>`<div class="cert-line"><strong>${x(c.name)}</strong>${c.issuer?' · '+x(c.issuer):''}${c.year?' · '+x(c.year):''}</div>`).join('')}`:''}
 </body></html>`;
   }
 
@@ -2559,8 +2627,8 @@ ${s.certifications.filter(c=>c.name).length?`<div class="section-title">Certific
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${x(p.name)} — Resume</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-@page{size:A4;margin:14mm 18mm 14mm 18mm}
-body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;background:white;color:#222;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:8.5px;line-height:1.55}
+@page{size:A4;margin:0}
+body{font-family:Calibri,'Helvetica Neue',Helvetica,Arial,sans-serif;padding:12mm 16mm;background:white;color:#222;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:8.5px;line-height:1.55}
 .mn-name{font-size:22px;font-weight:300;letter-spacing:3px;text-transform:uppercase;color:#111;margin-bottom:4px}
 .mn-title{font-size:9px;color:#777;letter-spacing:1px;margin-bottom:8px}
 .mn-contacts{display:flex;gap:14px;font-size:7.5px;color:#888;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #ddd}
@@ -2571,8 +2639,8 @@ body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;background:white;co
 .mn-exp-title{font-size:9px;font-weight:600;color:#111;flex:1}
 .mn-exp-date{font-size:7.5px;color:#888;margin-left:8px;white-space:nowrap}
 .mn-exp-company{font-size:7.5px;color:#888;margin-bottom:4px}
-.mn-bullet{font-size:7.5px;color:#444;padding-left:12px;position:relative;margin-bottom:2.5px;line-height:1.45}
-.mn-bullet::before{content:'–';position:absolute;left:0;color:#bbb}
+.mn-bullet{font-size:7.5px;color:#444;display:flex;gap:6px;margin-bottom:2px;line-height:1.4}
+.mn-bullet-dash{color:#bbb;flex-shrink:0}
 .mn-skill-line{font-size:7.5px;color:#555;margin-bottom:3px;line-height:1.5}
 .mn-skill-cat{font-weight:600;color:#333}
 .mn-cert{font-size:7.5px;color:#444;margin-bottom:3px}
@@ -2585,7 +2653,7 @@ ${s.experience.filter(e=>e.role).length?`<div class="mn-section">Experience</div
 <div class="mn-entry">
   <div class="mn-exp-row"><div class="mn-exp-title">${x(e.role)} — ${x(e.company||'')}</div><div class="mn-exp-date">${x(e.start||'')}${e.end?' – '+x(e.end):''}</div></div>
   ${e.location?`<div class="mn-exp-company">${x(e.location)}</div>`:''}
-  ${(e.bullets||[]).filter(b=>b.trim()).map(b=>`<div class="mn-bullet">${x(b)}</div>`).join('')}
+  ${(e.bullets||[]).filter(b=>b.trim()).map(b=>`<div class="mn-bullet"><span class="mn-bullet-dash">–</span><span>${x(b)}</span></div>`).join('')}
 </div>`).join('')}`:''}
 ${(s.skills.tech||s.skills.soft)?`<div class="mn-section">Skills</div>
 ${s.skills.tech?`<div class="mn-skill-line"><span class="mn-skill-cat">Technical: </span>${x((s.skills.tech||'').split(',').slice(0,15).join(', '))}</div>`:''}
@@ -2593,8 +2661,8 @@ ${s.skills.soft?`<div class="mn-skill-line"><span class="mn-skill-cat">Leadershi
 ${s.skills.tools?`<div class="mn-skill-line"><span class="mn-skill-cat">Tools: </span>${x(s.skills.tools)}</div>`:''}`:''}
 ${s.education.filter(e=>e.institution).length?`<div class="mn-section">Education</div>${s.education.filter(e=>e.institution).map(e=>`
 <div class="mn-entry">
-  <div class="mn-exp-row"><div class="mn-exp-title">${x(e.degree||'')}${e.field?', '+x(e.field):''}</div><div class="mn-exp-date">${x(e.year||'')}</div></div>
-  <div class="mn-exp-company">${x(e.institution||'')}${e.gpa?' · GPA '+x(e.gpa):''}</div>
+  <div class="mn-exp-row"><div class="mn-exp-title">${x(e.degree||'')}${e.field?', '+x(e.field):''}</div><div class="mn-exp-date">${x(e.year||'')}${e.gpa?' · GPA '+x(e.gpa):''}</div></div>
+  <div class="mn-exp-company">${x(e.institution||'')}</div>
 </div>`).join('')}`:''}
 ${s.projects.filter(p=>p.name).length?`<div class="mn-section">Projects</div>${s.projects.filter(p=>p.name).map(p=>`
 <div class="mn-entry">
@@ -2612,6 +2680,9 @@ let autoFillDone = false;
 async function autoFillFromResume() {
   if (!sessionId || autoFillDone) return;
   autoFillDone = true;
+
+  // ── Reset counters so fill-bullets can use array index directly ──
+  expIdx = 0; eduIdx = 0; projIdx = 0; certIdx = 0;
 
   // Show banner
   const banner = elById('autofill-banner');

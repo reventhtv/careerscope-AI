@@ -286,35 +286,66 @@ def parse_resume(raw_text: str) -> dict:
     # ── 7. Post-process: Skills ──────────────────────────────────────
     skill_blob = ' '.join(skill_lines)
 
-    def _extract_skill_block(blob, label_re):
-        m = re.search(
-            rf'{label_re}[^:]*:\s*(.+?)(?=\s*•\s*[A-Z][a-z]|\Z)',
-            blob, re.IGNORECASE | re.DOTALL
-        )
-        if not m:
-            return []
-        raw   = re.sub(r'\s+', ' ', m.group(1)).strip()
-        items = [i.strip() for i in re.split(r'\s*[•·]\s*', raw) if i.strip()]
-        return items
+    def _split_skill_items(chunk: str) -> list:
+        """Split a skill category chunk on bullet separators and commas."""
+        chunk = re.sub(r'\s+', ' ', chunk).strip()
+        items = [i.strip() for i in re.split(r'\s*[•·]\s*', chunk) if i.strip()]
+        flat = []
+        for it in items:
+            if ',' in it and len(it.split(',')) <= 6:
+                flat.extend(p.strip() for p in it.split(',') if p.strip())
+            else:
+                flat.append(it)
+        return flat
 
-    prog_items   = _extract_skill_block(skill_blob, r'Programming\s*&?\s*Tools?')
-    emb_items    = _extract_skill_block(skill_blob, r'Embedded Systems')
-    soft_items   = _extract_skill_block(skill_blob, r'Product\s*&?\s*Delivery Leadership')
-    domain_items = _extract_skill_block(skill_blob, r'Domains')
+    # Locate each category by finding its label → colon start position
+    SKILL_CATS = [
+        ('tech_pm',     re.compile(r'Technical Project Management\s*:', re.I)),
+        ('delivery',    re.compile(r'Product\s*&?\s*Delivery\s+Leadership\s*:', re.I)),
+        ('embedded',    re.compile(r'Embedded Systems[^:]*:', re.I)),
+        ('domains',     re.compile(r'Domains\s*:', re.I)),
+        ('programming', re.compile(r'Programming\s*&?\s*Tools?\s*:', re.I)),
+    ]
+    cat_starts = []
+    for key, pat in SKILL_CATS:
+        m = pat.search(skill_blob)
+        if m:
+            cat_starts.append((m.end(), key))  # start after the colon
+    cat_starts.sort(key=lambda x: x[0])
 
-    # Deduplicated tech skills
+    cat_chunks: dict = {}
+    for i, (start, key) in enumerate(cat_starts):
+        end = cat_starts[i + 1][0] if i + 1 < len(cat_starts) else len(skill_blob)
+        # Trim back to before the next category's label text
+        chunk = skill_blob[start:end]
+        # Remove the next label heading from the tail
+        if i + 1 < len(cat_starts):
+            next_key = cat_starts[i + 1][1]
+            for _, npat in SKILL_CATS:
+                nm = npat.search(chunk)
+                if nm:
+                    chunk = chunk[:nm.start()]
+                    break
+        cat_chunks[key] = _split_skill_items(chunk)
+
+    prog_items   = cat_chunks.get('programming', [])
+    emb_items    = cat_chunks.get('embedded', [])
+    soft_items   = cat_chunks.get('delivery', [])
+    domain_items = cat_chunks.get('domains', [])
+
+    # Deduplicated tech skills: programming tools + embedded
     seen, tech_out = set(), []
     for item in (prog_items + emb_items):
         k = item.lower().strip()
-        if k and k not in seen:
+        if k and k not in seen and len(k) > 1:
             seen.add(k)
             tech_out.append(item.strip())
 
-    result['skills']['tech']  = ', '.join(tech_out[:18])
-    result['skills']['soft']  = ', '.join(soft_items[:10])
+    result['skills']['tech']  = ', '.join(tech_out[:20])
+    result['skills']['soft']  = ', '.join(soft_items[:12])
     result['skills']['tools'] = ', '.join(domain_items[:8])
 
-    # Fallback: if skill sections not found by label, dump raw text
+    # Fallback
     if not result['skills']['tech'] and skill_blob:
         result['skills']['tech'] = re.sub(r'\s+', ' ', skill_blob)[:300]
 

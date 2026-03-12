@@ -571,6 +571,123 @@ async def extract_resume(sid: str):
         return {"parse_error": True, "message": "Could not parse resume — please fill in manually."}
 
 
+@app.post("/api/ai-resume-assist")
+async def ai_resume_assist(payload: dict):
+    """
+    AI assistant for the Resume Builder.
+    Actions:
+      improve_text   — rewrite existing text to be sharper
+      generate_section — generate content from profile context
+      suggest_bullets  — generate bullets for an experience entry
+      tailor_resume  — rewrite text to match a job description
+    """
+    from ai_client import ask_ai
+
+    action       = payload.get("action", "")
+    context      = payload.get("context", "")      # current text / profile context
+    section_type = payload.get("section_type", "")  # summary | skills | exp_description
+    extra        = payload.get("extra", "")         # JD text or skills list
+
+    if not action:
+        raise HTTPException(status_code=400, detail="action is required")
+
+    # ── improve_text ─────────────────────────────────────────────
+    if action == "improve_text":
+        prompt = f"""You are an expert resume writer. Rewrite the following {section_type or 'resume'} text to be:
+- More impactful and results-focused
+- Concise (same length or shorter)
+- Professional and ATS-friendly
+- Free of passive voice where possible
+
+Original:
+{context}
+
+Return ONLY the improved text, no explanation, no quotes."""
+        result = ask_ai(prompt)
+        return {"improved": result.strip()}
+
+    # ── generate_section ─────────────────────────────────────────
+    if action == "generate_section":
+        if section_type == "summary":
+            prompt = f"""Write a 2-sentence professional resume summary for:
+{context}
+
+Key skills: {extra or 'not specified'}
+
+Requirements:
+- Start with a strong hook (title + years of experience or key credential)
+- Mention 2-3 core competencies
+- Include one measurable achievement or unique value
+- Under 60 words total
+- No bullet points, just clean prose
+
+Return ONLY the summary text."""
+            result = ask_ai(prompt)
+            return {"content": result.strip()}
+
+        elif section_type == "skills":
+            prompt = f"""Based on this professional profile, suggest 12-15 technical skills:
+{context}
+
+Return ONLY a comma-separated list of skills, no explanation."""
+            result = ask_ai(prompt)
+            return {"content": result.strip()}
+
+        else:
+            return {"content": "", "bullets": []}
+
+    # ── suggest_bullets ──────────────────────────────────────────
+    if action == "suggest_bullets":
+        role    = payload.get("role", context)
+        company = payload.get("company", "")
+        prompt = f"""Write 5 strong resume bullet points for:
+Role: {role}
+Company: {company}
+
+Each bullet must:
+- Start with a past-tense action verb (Led, Built, Designed, Implemented, etc.)
+- Include a specific metric or outcome where plausible
+- Be under 20 words
+- Be ATS-friendly
+
+Return ONLY valid JSON: {{"bullets": ["bullet 1", "bullet 2", "bullet 3", "bullet 4", "bullet 5"]}}"""
+        raw = ask_ai(prompt)
+        try:
+            d = _extract_json(raw)
+            return {"bullets": d.get("bullets", [])}
+        except Exception:
+            return {"bullets": []}
+
+    # ── tailor_resume ─────────────────────────────────────────────
+    if action == "tailor_resume":
+        if not extra:
+            raise HTTPException(status_code=400, detail="extra (job description) is required for tailor_resume")
+        prompt = f"""You are an expert resume writer. Tailor this resume {section_type or 'section'} to better match the job description below.
+
+Current text:
+{context}
+
+Job Description:
+{extra[:2000]}
+
+Requirements:
+- Keep the same factual content (don't invent new experiences)
+- Naturally incorporate relevant keywords from the JD
+- Improve phrasing to match the role's language
+- Keep approximately the same length
+
+Return ONLY valid JSON:
+{{"tailored": "the rewritten text here", "keywords_added": ["keyword1", "keyword2"]}}"""
+        raw = ask_ai(prompt)
+        try:
+            d = _extract_json(raw)
+            return {"tailored": d.get("tailored", context), "keywords_added": d.get("keywords_added", [])}
+        except Exception:
+            return {"tailored": context, "keywords_added": []}
+
+    raise HTTPException(status_code=400, detail=f"Unknown action: {action}")
+
+
 @app.post("/api/fill-bullets")
 async def fill_bullets(payload: dict):
     """
