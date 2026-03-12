@@ -593,7 +593,23 @@ async def ai_resume_assist(payload: dict):
 
     # ── improve_text ─────────────────────────────────────────────
     if action == "improve_text":
-        prompt = f"""You are an expert resume writer. Rewrite the following {section_type or 'resume'} text to be:
+        if section_type == "summary":
+            prompt = f"""You are an expert resume writer. Rewrite this professional summary as exactly 4–5 sharp bullet points.
+
+Original text:
+{context}
+
+Rules:
+- Output ONLY bullet lines, one per line, each starting with •
+- Each bullet = one strong, focused idea (credential, domain, skill, or achievement)
+- Each bullet must fit in 1–2 lines (max ~25 words)
+- Start each bullet with a bold keyword or credential where natural (e.g. "PMP/CAPM certified", "8+ years", "Proven in")
+- No paragraph prose — bullets only
+- Exactly 4 or 5 bullets, never more
+
+Return ONLY the bullet lines, nothing else."""
+        else:
+            prompt = f"""You are an expert resume writer. Rewrite the following {section_type or 'resume'} text to be:
 - More impactful and results-focused
 - Concise (same length or shorter)
 - Professional and ATS-friendly
@@ -609,19 +625,22 @@ Return ONLY the improved text, no explanation, no quotes."""
     # ── generate_section ─────────────────────────────────────────
     if action == "generate_section":
         if section_type == "summary":
-            prompt = f"""Write a 2-sentence professional resume summary for:
+            prompt = f"""Write a professional resume summary as exactly 4 bullet points for this person:
 {context}
 
-Key skills: {extra or 'not specified'}
+Key skills / domain: {extra or 'not specified'}
 
-Requirements:
-- Start with a strong hook (title + years of experience or key credential)
-- Mention 2-3 core competencies
-- Include one measurable achievement or unique value
-- Under 60 words total
-- No bullet points, just clean prose
+Rules:
+- Output ONLY bullet lines, one per line, each starting with •
+- Bullet 1: Title + certification + years of experience (the hook)
+- Bullet 2: Core technical domain and depth (embedded, wireless, automation, etc.)
+- Bullet 3: Program/project management strength or methodology
+- Bullet 4: A unique differentiator, GenAI capability, or key achievement
+- Each bullet must fit in 1–2 lines (max ~25 words)
+- No paragraph prose — bullets only
+- Exactly 4 bullets
 
-Return ONLY the summary text."""
+Return ONLY the bullet lines, nothing else."""
             result = ask_ai(prompt)
             return {"content": result.strip()}
 
@@ -662,7 +681,30 @@ Return ONLY valid JSON: {{"bullets": ["bullet 1", "bullet 2", "bullet 3", "bulle
     if action == "tailor_resume":
         if not extra:
             raise HTTPException(status_code=400, detail="extra (job description) is required for tailor_resume")
-        prompt = f"""You are an expert resume writer. Tailor this resume {section_type or 'section'} to better match the job description below.
+
+        is_summary = section_type == "summary" or context.strip().startswith("•")
+
+        if is_summary:
+            prompt = f"""You are an expert resume writer. Tailor this professional summary to better match the job description below.
+
+Current summary (bullet format):
+{context}
+
+Job Description:
+{extra[:2000]}
+
+Rules:
+- Output ONLY bullet lines, one per line, each starting with •
+- Keep the same factual content — do NOT invent new experiences or credentials
+- Naturally weave in 2–3 relevant keywords from the JD into the existing bullets
+- Keep each bullet to 1–2 lines (max ~25 words)
+- Exactly 4 or 5 bullets, never more
+- No paragraph prose — bullets only
+
+Return ONLY valid JSON:
+{{"tailored": "• bullet 1\\n• bullet 2\\n• bullet 3\\n• bullet 4", "keywords_added": ["keyword1", "keyword2"]}}"""
+        else:
+            prompt = f"""You are an expert resume writer. Tailor this resume {section_type or 'section'} to better match the job description below.
 
 Current text:
 {context}
@@ -678,6 +720,7 @@ Requirements:
 
 Return ONLY valid JSON:
 {{"tailored": "the rewritten text here", "keywords_added": ["keyword1", "keyword2"]}}"""
+
         raw = ask_ai(prompt)
         try:
             d = _extract_json(raw)
