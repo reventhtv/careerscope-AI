@@ -552,14 +552,13 @@
 
     /* Classic template */
     .resume-classic { padding: 22px 24px; }
-    .rc2-hdr { text-align: center; border-bottom: 2px solid #1a1a1a; padding-bottom: 8px; margin-bottom: 9px; }
+    .rc2-hdr { text-align: center; padding-bottom: 6px; margin-bottom: 14px; }
     .rc2-name { font-size: 19px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #0d0d0d; line-height: 1.1; }
     .rc2-title { font-size: 9.5px; color: #444; margin: 3px 0 5px; letter-spacing: .5px; font-style: italic; }
     .rc2-contacts { display: flex; justify-content: center; flex-wrap: wrap; font-size: 8.5px; color: #333; gap: 0; }
     .rc2-sep { margin: 0 7px; color: #aaa; }
     .rc2-sec { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.8px; color: #0d0d0d; border-bottom: 1.5px solid #0d0d0d; margin: 10px 0 5px; padding-bottom: 2px; }
-    .rc2-sum-bul { font-size: 9px; color: #1a1a1a; padding-left: 11px; position: relative; margin-bottom: 3px; line-height: 1.5; }
-    .rc2-sum-bul::before { content: '•'; position: absolute; left: 1px; color: #333; }
+    .rc2-sum-bul { font-size: 9px; color: #1a1a1a; display: flex; gap: 6px; margin-bottom: 3px; line-height: 1.5; }
     .rc2-entry { margin-bottom: 9px; }
     .rc2-role-bar { background: #eef2fb; border-left: 3px solid #2b4da8; padding: 3px 8px; font-size: 10px; font-weight: 700; color: #0d0d0d; margin-bottom: 3px; }
     .rc2-co-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; }
@@ -1827,6 +1826,7 @@ function syncResume() {
       start:    val(`exp-start-${idx}`),
       end:      elById(`exp-current-${idx}`)?.checked ? 'Present' : val(`exp-end-${idx}`),
       location: val(`exp-loc-${idx}`),
+      domain:   val(`exp-domain-${idx}`),
       bullets,
     });
   });
@@ -1963,6 +1963,10 @@ function addExp() {
           </div>
           <div class="form-group"><label class="form-label">Location</label>
             <input class="field-input" id="exp-loc-${idx}" placeholder="Bengaluru" oninput="syncResume()"></div>
+        </div>
+        <div class="form-group" style="margin-bottom:8px">
+          <label class="form-label">Domain / Tech Tags <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-mut)">– optional, shown in Classic template</span></label>
+          <input class="field-input" id="exp-domain-${idx}" placeholder="e.g. 5G · Embedded IoT · Test Automation" oninput="syncResume()">
         </div>
         <div class="form-group">
           <label class="form-label">Bullet Points
@@ -2368,10 +2372,12 @@ function renderModern() {
 function renderClassic() {
   const p = rb.personal;
   const contacts = [];
-  if (p.email)    contacts.push(`✉ ${esc(p.email)}`);
-  if (p.phone)    contacts.push(`✆ ${esc(p.phone)}`);
-  if (p.location) contacts.push(`📍 ${esc(p.location)}`);
-  if (p.linkedin) contacts.push(`🔗 ${esc(p.linkedin)}`);
+  if (p.email)     contacts.push(`✉ ${esc(p.email)}`);
+  if (p.phone)     contacts.push(`✆ ${esc(p.phone)}`);
+  if (p.location)  contacts.push(`📍 ${esc(p.location)}`);
+  if (p.linkedin)  contacts.push(`🔗 ${esc(p.linkedin)}`);
+  if (p.portfolio) contacts.push(`⌨ ${esc(p.portfolio)}`);
+  if (p.website)   contacts.push(`🌐 ${esc(p.website)}`);
 
   // Summary bullets: split by • or newline
   const sumBullets = rb.summary
@@ -2384,7 +2390,7 @@ function renderClassic() {
       ${p.title?`<div class="rc2-title">${esc(p.title)}</div>`:''}
       <div class="rc2-contacts">${contacts.map((c,i)=>`${i?'<span class="rc2-sep">|</span>':''}${c}`).join('')}</div>
     </div>
-    ${sumBullets.length?`<div class="rc2-sec">Summary</div>${sumBullets.map(l=>`<div class="rc2-sum-bul">${esc(l)}</div>`).join('')}`:''}
+    ${sumBullets.length?`<div class="rc2-sec">Summary</div>${sumBullets.map(l=>`<div class="rc2-sum-bul"><span style="flex-shrink:0;color:#555;">•</span><span>${esc(l)}</span></div>`).join('')}`:''}
     ${rb.experience.length?`<div class="rc2-sec">Professional Experience</div>${rb.experience.filter(e=>e.role).map(e=>`
       <div class="rc2-entry">
         <div class="rc2-role-bar">${esc(e.role)}</div>
@@ -2392,6 +2398,7 @@ function renderClassic() {
           <span class="rc2-co">${esc(e.company)}${e.location?' · '+esc(e.location):''}</span>
           <span class="rc2-date">${e.start?esc(e.start)+' – '+esc(e.end||'Present'):''}</span>
         </div>
+        ${e.domain?`<div style="font-size:7.5px;color:#666;font-style:italic;margin-bottom:3px;">${esc(e.domain)}</div>`:''}
         ${e.bullets.map(b=>`<div class="rc2-bul"><span class="rc2-dot">–</span><span>${esc(b)}</span></div>`).join('')}
       </div>`).join('')}`:''}
     ${rb.education.length?`<div class="rc2-sec">Education</div>${rb.education.filter(e=>e.institution).map(e=>`
@@ -2555,24 +2562,25 @@ body{font-family:Calibri,'Segoe UI',Arial,sans-serif;background:white;color:#111
   /* ── CLASSIC template ── */
   if (s.template === 'classic') {
     const contacts = [];
-    if (p.email)    contacts.push(`✉ ${x(p.email)}`);
-    if (p.phone)    contacts.push(`✆ ${x(p.phone)}`);
-    if (p.location) contacts.push(`📍 ${x(p.location)}`);
-    if (p.linkedin) contacts.push(`🔗 ${x(p.linkedin)}`);
+    if (p.email)     contacts.push(`✉ ${x(p.email)}`);
+    if (p.phone)     contacts.push(`✆ ${x(p.phone)}`);
+    if (p.location)  contacts.push(`📍 ${x(p.location)}`);
+    if (p.linkedin)  contacts.push(`🔗 ${x(p.linkedin)}`);
+    if (p.portfolio) contacts.push(`⌨ ${x(p.portfolio)}`);
+    if (p.website)   contacts.push(`🌐 ${x(p.website)}`);
 
     return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${x(p.name)} — Resume</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 @page{size:A4;margin:0}
 body{font-family:Calibri,'Segoe UI',Arial,sans-serif;background:#fff;color:#1a1a1a;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:8.8px;line-height:1.5;padding:12mm 14mm 12mm 14mm}
-.hdr{text-align:center;padding-bottom:9px;margin-bottom:10px;border-bottom:2px solid #1a1a1a}
+.hdr{text-align:center;padding-bottom:6px;margin-bottom:14px}
 .hdr-name{font-size:22px;font-weight:700;letter-spacing:2px;text-transform:uppercase;font-family:Calibri,'Segoe UI',Arial,sans-serif;color:#0d0d0d;line-height:1.1}
 .hdr-title{font-size:9px;color:#444;margin:3px 0 6px;letter-spacing:.5px;font-style:italic}
 .hdr-contacts{display:flex;justify-content:center;flex-wrap:wrap;font-size:8px;color:#333}
 .hdr-sep{margin:0 7px;color:#aaa}
 .sec{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.8px;color:#0d0d0d;border-bottom:1.5px solid #0d0d0d;margin:10px 0 5px;padding-bottom:2px}
-.sum-bullet{font-size:8.8px;color:#1a1a1a;padding-left:11px;position:relative;margin-bottom:3px;line-height:1.5}
-.sum-bullet::before{content:'•';position:absolute;left:1px;color:#333}
+.sum-bullet{font-size:8.8px;color:#1a1a1a;display:flex;gap:6px;margin-bottom:3px;line-height:1.5}
 .exp-entry{margin-bottom:9px;break-inside:avoid;page-break-inside:avoid}
 .role-bar{background:#eef2fb;border-left:3px solid #2b4da8;padding:2.5px 7px;font-size:9.5px;font-weight:700;color:#0d0d0d;margin-bottom:3px}
 .co-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:1px}
@@ -2596,22 +2604,25 @@ body{font-family:Calibri,'Segoe UI',Arial,sans-serif;background:#fff;color:#1a1a
   <div class="hdr-contacts">${contacts.map((c,i)=>`${i?'<span class="hdr-sep">|</span>':''}${c}`).join('')}</div>
 </div>
 ${s.summary?`<div class="sec">Summary</div>
-${s.summary.split(/[•\n]/).map(l=>l.trim()).filter(l=>l.length>5).map(l=>`<div class="sum-bullet">${x(l)}</div>`).join('')}`:''}
+${s.summary.split(/[•\n]/).map(l=>l.trim()).filter(l=>l.length>5).map(l=>`<div class="sum-bullet"><span style="flex-shrink:0;color:#444;">•</span><span>${x(l)}</span></div>`).join('')}`:''}
 ${s.experience.filter(e=>e.role).length?`<div class="sec">Professional Experience</div>
 ${s.experience.filter(e=>e.role).map(e=>`<div class="exp-entry">
   <div class="role-bar">${x(e.role)}</div>
   <div class="co-row"><span class="co-name">${x(e.company||'')}${e.location?' · '+x(e.location):''}</span><span class="co-date">${x(e.start||'')}${e.end?' – '+x(e.end):''}</span></div>
+  ${e.domain?`<div class="domain-tag">${x(e.domain)}</div>`:''}
   ${(e.bullets||[]).filter(b=>b.trim()).map(b=>`<div class="bul"><span class="bul-dot">–</span><span>${x(b)}</span></div>`).join('')}
 </div>`).join('')}`:''}
 ${s.education.filter(e=>e.institution).length?`<div class="sec">Education</div>
 ${s.education.filter(e=>e.institution).map(e=>`<div class="edu-entry">
   <div class="edu-row"><span class="edu-deg">${x(e.degree||'')}${e.field?' – '+x(e.field):''}</span><span class="edu-yr">${x(e.year||'')}${e.gpa?' · GPA '+x(e.gpa):''}</span></div>
   <div class="edu-inst">${x(e.institution||'')}</div>
+  ${e.sub_institution?`<div class="edu-inst" style="font-style:italic;color:#555;font-size:7.5px;">${x(e.sub_institution)}</div>`:''}
 </div>`).join('')}`:''}
 ${(s.skills.tech||s.skills.soft||s.skills.tools)?`<div class="sec">Skills</div>
-${s.skills.tech?`<div class="skill-line"><span class="skill-cat">Technical: </span>${x((s.skills.tech||'').split(',').slice(0,15).join(', '))}</div>`:''}
+${s.skills.tech?`<div class="skill-line"><span class="skill-cat">Cloud, DevOps & Automation: </span>${x((s.skills.tech||'').split(',').slice(0,15).join(', '))}</div>`:''}
 ${s.skills.soft?`<div class="skill-line"><span class="skill-cat">Leadership & Delivery: </span>${x(s.skills.soft)}</div>`:''}
-${s.skills.tools?`<div class="skill-line"><span class="skill-cat">Domains: </span>${x(s.skills.tools)}</div>`:''}`:''}
+${s.skills.tools?`<div class="skill-line"><span class="skill-cat">Domains: </span>${x(s.skills.tools)}</div>`:''}
+${s.skills.metrics?`<div class="skill-line"><span class="skill-cat">Metrics & Business Impact: </span>${x(s.skills.metrics)}</div>`:''}`:''}
 ${s.projects.filter(p=>p.name).length?`<div class="sec">Projects</div>
 ${s.projects.filter(p=>p.name).map(p=>`<div class="exp-entry">
   <div class="role-bar">${x(p.name)}${p.tech?' <span style="font-weight:400;font-size:7.5px;">('+x(p.tech)+')</span>':''}</div>
@@ -2740,6 +2751,7 @@ async function autoFillFromResume() {
         setField(`exp-role-${idx}`,    exp.role);
         setField(`exp-company-${idx}`, exp.company);
         setField(`exp-loc-${idx}`,     exp.location);
+        setField(`exp-domain-${idx}`,  exp.domain || '');
         setField(`exp-start-${idx}`,   exp.start);
         if (exp.end === 'Present') {
           const cb = elById(`exp-current-${idx}`);
@@ -2819,7 +2831,7 @@ async function autoFillFromResume() {
 
     // ── Fill bullets to exactly 5 per experience ──────────────
     if (sessionId && d.experience?.length) {
-      banner && (banner.querySelector('.autofill-status').textContent = '⟳ Completing bullet points (5 per role)…');
+      banner && (banner.querySelector('.autofill-status').textContent = '⟳ Completing bullet points…');
       const fillPromises = d.experience.map(async (exp, i) => {
         const existing = exp.bullets || [];
         if (existing.length >= 5) return;
@@ -2852,7 +2864,7 @@ async function autoFillFromResume() {
     updateLiveATS();
 
     if (banner) {
-      banner.querySelector('.autofill-status').textContent = '✓ Resume imported — 5 bullets filled per role. Review and edit below';
+      banner.querySelector('.autofill-status').textContent = '✓ Resume imported — all fields filled. Review and edit below';
       banner.style.background = 'rgba(0,230,118,.08)';
       banner.style.borderColor = 'rgba(0,230,118,.3)';
       banner.querySelector('.autofill-status').style.color = 'var(--green)';

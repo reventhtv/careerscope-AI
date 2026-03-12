@@ -54,7 +54,7 @@ def parse_resume(raw_text: str) -> dict:
     DATE_RANGE_RE = re.compile(
         rf'({DATE})\s*[–—\-]+\s*({DATE})', re.IGNORECASE
     )
-    BULLET_RE   = re.compile(r'^[•*]\s+(.+)$')
+    BULLET_RE   = re.compile(r'^[•*\u2013\u2014\u25b8\-]\s+(.+)$')  # •, *, –, —, ▸, -
 
     # ── 3. Job-title detector ────────────────────────────────────────
     def _is_job_title(line: str) -> bool:
@@ -94,7 +94,7 @@ def parse_resume(raw_text: str) -> dict:
         'summary':        '',
         'experience':     [],
         'education':      [],
-        'skills':         {'tech': '', 'soft': '', 'tools': ''},
+        'skills':         {'tech': '', 'soft': '', 'tools': '', 'metrics': ''},
         'projects':       [],
         'certifications': [],
     }
@@ -205,6 +205,7 @@ def parse_resume(raw_text: str) -> dict:
                     'role':     pending_role or '',
                     'company':  company,
                     'location': location,
+                    'domain':   '',
                     'start':    start,
                     'end':      end,
                     'bullets':  [],
@@ -215,7 +216,12 @@ def parse_resume(raw_text: str) -> dict:
             # (d) Domain/subdomain tag line right after company, before any bullets
             #     e.g. "Test Automation Software · Machine Learning"
             if current_exp is not None and not current_exp['bullets']:
-                continue   # skip domain tag silently
+                # Capture as domain tag if it looks like tags (has · or short enough)
+                if current_exp.get('domain') == '' and (
+                    '·' in line or len(line.split()) <= 6
+                ):
+                    current_exp['domain'] = line.strip()
+                continue   # skip from bullets regardless
 
             # (e) Job title line (bullet_buf is empty here)
             _flush_bullet()
@@ -257,18 +263,28 @@ def parse_resume(raw_text: str) -> dict:
 
         if is_deg:
             deg_text, yr_val = ln, cur_yr
-            if yr and ln.rstrip().endswith(yr.group()):
+            gpa_inline = ''
+            # Extract inline GPA: "M.Sc – Telecom Systems 2016 · GPA 9/10"
+            gpa_m = re.search(r'\s*[·,]?\s*GPA\s*:?\s*([\d./]+)', ln, re.I)
+            if gpa_m:
+                gpa_inline = gpa_m.group(1)
+                ln_trimmed = ln[:gpa_m.start()].strip()
+            else:
+                ln_trimmed = ln
+            if yr and ln_trimmed.rstrip().endswith(yr.group()):
                 yr_val   = yr.group()
-                deg_text = ln[:ln.rfind(yr.group())].strip()
+                deg_text = ln_trimmed[:ln_trimmed.rfind(yr.group())].strip()
             elif yr:
                 yr_val   = yr.group()
+                deg_text = ln_trimmed
             parts = re.split(r'\s*[-–]\s*', deg_text, maxsplit=1)
             edu_entries.append({
-                'institution': cur_inst or '',
-                'degree':      parts[0].strip(),
-                'field':       parts[1].strip() if len(parts) > 1 else '',
-                'year':        yr_val,
-                'gpa':         '',
+                'institution':     cur_inst or '',
+                'sub_institution': '',
+                'degree':          parts[0].strip(),
+                'field':           parts[1].strip() if len(parts) > 1 else '',
+                'year':            yr_val,
+                'gpa':             gpa_inline,
             })
             cur_yr = ''   # reset year after using
         elif yr and len(ln.strip()) <= 8:
@@ -278,8 +294,25 @@ def parse_resume(raw_text: str) -> dict:
             if g and edu_entries:
                 edu_entries[-1]['gpa'] = g.group(1)
         else:
-            cur_inst = ln    # institution line
-            cur_yr   = ''    # reset year when we get new institution
+            # Check if this looks like a main institution name (next entry's institution)
+            # vs a sub-unit line (department, campus of prev entry)
+            ln_lower = ln.lower()
+            is_main_inst = (
+                any(kw in ln_lower for kw in ['university', 'hogskola', 'teknisk'])
+                and not any(sub in ln_lower for sub in ['jntu college', 'college of engineering'])
+            )
+            # Attach as sub_institution if:
+            # - there's a previous entry, this isn't a main institution name,
+            #   no year, and the prev entry has no sub_institution yet
+            if (edu_entries
+                    and not is_main_inst
+                    and not yr
+                    and not any(k in ln for k in DEGREE_KW)
+                    and not edu_entries[-1].get('sub_institution')):
+                edu_entries[-1]['sub_institution'] = ln
+            else:
+                cur_inst = ln    # institution line
+                cur_yr   = ''    # reset year when we get new institution
 
     result['education'] = edu_entries
 
@@ -292,7 +325,7 @@ def parse_resume(raw_text: str) -> dict:
         items = [i.strip() for i in re.split(r'\s*[•·]\s*', chunk) if i.strip()]
         flat = []
         for it in items:
-            if ',' in it and len(it.split(',')) <= 6:
+            if ',' in it and len(it.split(',')) <= 12:
                 flat.extend(p.strip() for p in it.split(',') if p.strip())
             else:
                 flat.append(it)
@@ -300,11 +333,20 @@ def parse_resume(raw_text: str) -> dict:
 
     # Locate each category by finding its label → colon start position
     SKILL_CATS = [
+        # Original Maxwell-style labels
         ('tech_pm',     re.compile(r'Technical Project Management\s*:', re.I)),
         ('delivery',    re.compile(r'Product\s*&?\s*Delivery\s+Leadership\s*:', re.I)),
         ('embedded',    re.compile(r'Embedded Systems[^:]*:', re.I)),
         ('domains',     re.compile(r'Domains\s*:', re.I)),
         ('programming', re.compile(r'Programming\s*&?\s*Tools?\s*:', re.I)),
+        # Exported Classic PDF labels (when user re-uploads their own export)
+        ('tech_export', re.compile(r'(?<![A-Za-z])Technical\s*:', re.I)),
+        ('soft_export', re.compile(r'Leadership\s*[&]?\s*Delivery\s*:', re.I)),
+        ('dom_export',  re.compile(r'Domains\s*:', re.I)),
+        # Metrics & Business Impact
+        ('metrics',     re.compile(r'Metrics\s*[&]?\s*Business\s+Impact\s*:', re.I)),
+        # Cloud, DevOps & Automation (template label for programming skills)
+        ('cloud_devops', re.compile(r'Cloud[,\s&]+DevOps[^:]*:', re.I)),
     ]
     cat_starts = []
     for key, pat in SKILL_CATS:
@@ -328,26 +370,34 @@ def parse_resume(raw_text: str) -> dict:
                     break
         cat_chunks[key] = _split_skill_items(chunk)
 
-    prog_items   = cat_chunks.get('programming', [])
+    prog_items   = cat_chunks.get('programming', []) + cat_chunks.get('tech_export', []) + cat_chunks.get('cloud_devops', [])
     emb_items    = cat_chunks.get('embedded', [])
-    soft_items   = cat_chunks.get('delivery', [])
-    domain_items = cat_chunks.get('domains', [])
+    soft_items   = cat_chunks.get('delivery', []) + cat_chunks.get('soft_export', [])
+    domain_items = cat_chunks.get('domains', []) + cat_chunks.get('dom_export', [])
 
     # Deduplicated tech skills: programming tools + embedded
+    # Exclude sub-category labels (contain ":") — these come from tech_pm bleeding
     seen, tech_out = set(), []
     for item in (prog_items + emb_items):
         k = item.lower().strip()
-        if k and k not in seen and len(k) > 1:
+        if k and k not in seen and len(k) > 1 and ':' not in item:
             seen.add(k)
             tech_out.append(item.strip())
 
-    result['skills']['tech']  = ', '.join(tech_out[:20])
-    result['skills']['soft']  = ', '.join(soft_items[:12])
-    result['skills']['tools'] = ', '.join(domain_items[:8])
+    metrics_items = cat_chunks.get('metrics', [])
+    result['skills']['tech']    = ', '.join(tech_out[:20])
+    result['skills']['soft']    = ', '.join(soft_items[:12])
+    result['skills']['tools']   = ', '.join(domain_items[:8])
+    result['skills']['metrics'] = ', '.join(metrics_items[:8])
 
-    # Fallback
-    if not result['skills']['tech'] and skill_blob:
-        result['skills']['tech'] = re.sub(r'\s+', ' ', skill_blob)[:300]
+    # Fallback: only if ALL structured patterns failed
+    if not result['skills']['tech'] and not result['skills']['soft'] and skill_blob:
+        # Split on bullets/commas; exclude category labels (contain ':') and long sentences
+        raw_items = [
+            i.strip() for i in re.split(r'[\u2022\u00b7,\n]', skill_blob)
+            if 2 < len(i.strip()) < 35 and ':' not in i
+        ]
+        result['skills']['tech'] = ', '.join(raw_items[:15])
 
     # ── 8. Post-process: Summary — cap at 2 sentences ────────────────
     sents = re.split(r'(?<=[.!?])\s+', result['summary'].strip())
