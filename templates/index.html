@@ -504,15 +504,40 @@
 
     /* Bullet list inside entry */
     .bullet-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
-    .bullet-input-row { display: flex; gap: 8px; align-items: flex-start; }
+    .bullet-input-row { display: flex; gap: 6px; align-items: flex-start; }
     .bullet-input { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 12px; color: var(--text); font-family: var(--fb); font-size: .84rem; transition: border-color .2s; }
     .bullet-input:focus { outline: none; border-color: var(--accent); }
-    .bullet-remove-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: .9rem; padding: 9px 6px; transition: color .18s; flex-shrink: 0; }
+    .bullet-remove-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: .9rem; padding: 9px 4px; transition: color .18s; flex-shrink: 0; }
     .bullet-remove-btn:hover { color: var(--red); }
+    .bullet-reorder-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: .75rem; padding: 6px 3px; flex-shrink: 0; line-height:1; display:flex; flex-direction:column; gap:1px; align-items:center; justify-content:center; opacity:.6; transition:opacity .18s; }
+    .bullet-reorder-btn:hover { opacity:1; color: var(--accent); }
+    .bullet-char-count { font-size:.58rem; color:var(--text-muted); flex-shrink:0; padding-top:12px; min-width:26px; text-align:right; }
+    .bullet-char-count.warn { color: #f59e0b; }
+    .bullet-char-count.over { color: var(--red); }
     .add-bullet-btn { background: none; border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 7px 14px; color: var(--text-muted); font-family: var(--fm); font-size: .65rem; cursor: pointer; transition: all .18s; margin-top: 4px; display: inline-flex; align-items: center; gap: 6px; }
     .add-bullet-btn:hover { border-color: var(--accent); color: var(--accent); }
     .add-entry-btn { background: none; border: 1px dashed var(--border); border-radius: var(--radius); padding: 12px; color: var(--text-muted); font-family: var(--fm); font-size: .7rem; cursor: pointer; transition: all .18s; display: flex; align-items: center; justify-content: center; gap: 8px; letter-spacing: 1px; text-transform: uppercase; }
     .add-entry-btn:hover { border-color: var(--green); color: var(--green); }
+    /* Suggestions dropdown */
+    .suggestions-panel { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:10px; margin-top:8px; }
+    .suggestion-chip { display:inline-block; background:rgba(0,200,150,.07); border:1px solid rgba(0,200,150,.2); border-radius:20px; padding:5px 12px; font-size:.72rem; color:var(--text-mut); cursor:pointer; margin:3px; transition:all .15s; }
+    .suggestion-chip:hover { background:rgba(0,200,150,.18); color:var(--green); border-color:var(--green); }
+    /* Step completion badges */
+    .wstep.complete .wstep-circle { background: var(--green) !important; border-color: var(--green) !important; }
+    /* Undo toast */
+    .undo-banner { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:#1e293b; border:1px solid var(--border); border-radius:var(--radius); padding:10px 20px; display:flex; gap:14px; align-items:center; font-size:.8rem; color:var(--text); z-index:9999; box-shadow:0 4px 20px rgba(0,0,0,.4); }
+    .undo-banner button { background:var(--accent); border:none; border-radius:6px; padding:5px 14px; color:white; cursor:pointer; font-size:.78rem; }
+    /* Tips box */
+    .step-tip { background:rgba(0,200,150,.06); border:1px solid rgba(0,200,150,.15); border-radius:var(--radius-sm); padding:10px 14px; margin-bottom:16px; font-size:.78rem; color:var(--text-mut); line-height:1.6; }
+    .step-tip strong { color:var(--green); }
+    /* Color picker */
+    .color-swatch { width:28px; height:28px; border-radius:50%; cursor:pointer; border:3px solid transparent; transition:all .15s; }
+    .color-swatch.selected { border-color: white; box-shadow:0 0 0 2px var(--accent); }
+    /* Entry reorder */
+    .entry-reorder-btn { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:.8rem; padding:6px 4px; opacity:.5; transition:opacity .15s; }
+    .entry-reorder-btn:hover { opacity:1; color:var(--accent); }
+    /* Section completion dot */
+    .step-complete-dot { width:8px; height:8px; border-radius:50%; background:var(--green); display:inline-block; margin-left:6px; }
 
     /* Live ATS meter */
     .live-ats-bar { position: sticky; top: 0; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 20px; display: flex; align-items: center; gap: 14px; margin: -44px -52px 28px; }
@@ -873,6 +898,8 @@
 
         <!-- Wizard stepper -->
         <div class="wizard-steps" id="wizard-steps"></div>
+        <!-- Step tip (injected by renderWizard) -->
+        <div id="builder-step-tip"></div>
 
         <!-- Step content -->
         <div id="builder-step-content">
@@ -932,9 +959,23 @@
               <div></div>
               <button class="btn btn-primary" onclick="bNext()">Personal Info →</button>
             </div>
-          </div>
-
-          <!-- STEP 1: Personal Info -->
+            <!-- Accent color + spacing controls -->
+            <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border);">
+              <div style="display:flex;gap:32px;flex-wrap:wrap;">
+                <div>
+                  <div class="form-label" style="margin-bottom:10px;">Accent Colour</div>
+                  <div id="accent-color-picker" style="display:flex;gap:8px;"></div>
+                </div>
+                <div>
+                  <div class="form-label" style="margin-bottom:10px;">Spacing</div>
+                  <div style="display:flex;gap:8px;">
+                    <button class="ai-mini-btn" id="sp-compact" onclick="selectSpacing('compact',this)">Compact</button>
+                    <button class="ai-mini-btn selected" id="sp-normal" onclick="selectSpacing('normal',this)">Normal</button>
+                    <button class="ai-mini-btn" id="sp-spacious" onclick="selectSpacing('spacious',this)">Spacious</button>
+                  </div>
+                </div>
+              </div>
+            </div>
           <div class="builder-step hidden" id="bstep-1">
             <div class="section-title">Personal Information</div>
             <div class="builder-form">
@@ -1745,7 +1786,7 @@ let atsDebounce = null;
 let rb = {
   template: 'modern',
   personal: {},
-  summary: '',
+  summary: [],
   experience: [],
   education: [],
   skills: { tech: '', soft: '', tools: '' },
@@ -1758,15 +1799,20 @@ function bNext() { if (bStep < STEPS.length - 1) { bStep++; renderWizard(); } }
 function bPrev() { if (bStep > 0) { bStep--; renderWizard(); } }
 
 function renderWizard() {
-  // Update stepper
+  // Update stepper with completion badges
   const stepsEl = document.getElementById('wizard-steps');
   stepsEl.innerHTML = STEPS.map((label, i) => {
-    const cls = i < bStep ? 'done' : i === bStep ? 'active' : '';
+    const done = i < bStep;
+    const active = i === bStep;
+    const complete = isStepComplete(i);
+    const cls = done ? 'done' : active ? 'active' : '';
+    const completeCls = complete && !active ? ' complete' : '';
     const connector = i < STEPS.length - 1
-      ? `<div class="wstep-connector${i < bStep ? ' done' : ''}"></div>` : '';
-    return `<div class="wstep ${cls}">
+      ? `<div class="wstep-connector${done ? ' done' : ''}"></div>` : '';
+    const icon = done ? '✓' : (complete && !active ? '✓' : i + 1);
+    return `<div class="wstep ${cls}${completeCls}">
       <button class="wstep-btn" onclick="goStep(${i})">
-        <div class="wstep-circle">${i < bStep ? '✓' : i + 1}</div>
+        <div class="wstep-circle">${icon}</div>
         <div class="wstep-label">${label}</div>
       </button>
     </div>${connector}`;
@@ -1776,6 +1822,13 @@ function renderWizard() {
   document.querySelectorAll('.builder-step').forEach((el, i) =>
     el.classList.toggle('hidden', i !== bStep)
   );
+
+  // Inject step tip
+  const tipEl = document.getElementById('builder-step-tip');
+  if (tipEl) {
+    const tip = STEP_TIPS[bStep];
+    tipEl.innerHTML = tip ? `<div class="step-tip">${tip}</div>` : '';
+  }
 
   // Show live ATS bar from step 1 onwards
   const atsBar = document.getElementById('live-ats-bar');
@@ -1919,6 +1972,18 @@ function updateLiveATS() {
   fill.style.background = score >= 80 ? 'var(--green)' : score >= 60 ? 'var(--yellow)' : 'var(--orange)';
   valEl.textContent = score + '%';
   valEl.style.color = score >= 80 ? 'var(--green)' : score >= 60 ? 'var(--yellow)' : 'var(--orange)';
+
+  // Auto-save + refresh step completion badges
+  autoSave();
+  // Refresh stepper completion state without full renderWizard (avoids flicker)
+  document.querySelectorAll('.wstep').forEach((el, i) => {
+    const complete = isStepComplete(i) && i !== bStep;
+    el.classList.toggle('complete', complete);
+    const circle = el.querySelector('.wstep-circle');
+    if (circle && i !== bStep && !el.classList.contains('done')) {
+      circle.textContent = complete ? '✓' : i + 1;
+    }
+  });
 }
 
 function resumeToText() {
@@ -1944,6 +2009,9 @@ function addExp() {
         <div class="entry-card-sub" id="exp-subheader-${idx}">Company · Dates</div>
       </div>
       <div class="entry-card-actions">
+        <button class="entry-reorder-btn" onclick="event.stopPropagation();reorderEntry(this,-1)" title="Move up">↑</button>
+        <button class="entry-reorder-btn" onclick="event.stopPropagation();reorderEntry(this,1)" title="Move down">↓</button>
+        <button class="entry-reorder-btn" onclick="event.stopPropagation();duplicateExpEntry(this)" title="Duplicate" style="font-size:.7rem;">⧉</button>
         <button class="entry-toggle">▾</button>
         <button class="entry-delete" onclick="event.stopPropagation();this.closest('.entry-card').remove();syncResume()">✕</button>
       </div>
@@ -1960,7 +2028,7 @@ function addExp() {
           <div class="form-group"><label class="form-label">Start</label>
             <input class="field-input" id="exp-start-${idx}" placeholder="Jan 2022" oninput="syncResume()"></div>
           <div class="form-group"><label class="form-label">End</label>
-            <input class="field-input" id="exp-end-${idx}" placeholder="Dec 2024" oninput="syncResume()" id="exp-end-${idx}">
+            <input class="field-input" id="exp-end-${idx}" placeholder="Dec 2024" oninput="syncResume()">
             <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-family:var(--fm);font-size:.64rem;color:var(--text-muted);cursor:pointer;">
               <input type="checkbox" id="exp-current-${idx}" onchange="toggleCurrentJob(${idx})"> Present
             </label>
@@ -2003,6 +2071,8 @@ function addEdu() {
         <div class="entry-card-sub">Institution · Year</div>
       </div>
       <div class="entry-card-actions">
+        <button class="entry-reorder-btn" onclick="event.stopPropagation();reorderEntry(this,-1)" title="Move up">↑</button>
+        <button class="entry-reorder-btn" onclick="event.stopPropagation();reorderEntry(this,1)" title="Move down">↓</button>
         <button class="entry-toggle">▾</button>
         <button class="entry-delete" onclick="event.stopPropagation();this.closest('.entry-card').remove();syncResume()">✕</button>
       </div>
@@ -2102,15 +2172,41 @@ function addCert() {
 }
 
 // ── BULLET HELPERS ────────────────────
-function addBullet(listId) {
+function addBullet(listId, text) {
   const list = elById(listId);
   if (!list) return;
   const row = document.createElement('div');
   row.className = 'bullet-input-row';
-  row.innerHTML = `<input class="bullet-input" placeholder="• Describe your impact with specific metrics…" oninput="syncResume()">
-    <button class="bullet-remove-btn" onclick="this.closest('.bullet-input-row').remove();syncResume()">✕</button>`;
+  row.innerHTML = `
+    <div class="bullet-reorder-btn" onclick="reorderBullet(this,-1)" title="Move up">▲</div>
+    <div class="bullet-reorder-btn" onclick="reorderBullet(this,1)" title="Move down">▼</div>
+    <input class="bullet-input" value="${escAttr(text||'')}" placeholder="Describe your impact with a specific metric…" oninput="updateCharCount(this);syncResume()">
+    <span class="bullet-char-count">0</span>
+    <button class="bullet-remove-btn" onclick="this.closest('.bullet-input-row').remove();syncResume()" title="Remove">✕</button>`;
   list.appendChild(row);
-  row.querySelector('.bullet-input').focus();
+  const inp = row.querySelector('.bullet-input');
+  updateCharCount(inp);
+  inp.focus();
+}
+
+function updateCharCount(inp) {
+  const span = inp.nextElementSibling;
+  if (!span) return;
+  const n = inp.value.length;
+  span.textContent = n;
+  span.className = 'bullet-char-count' + (n > 160 ? ' over' : n > 120 ? ' warn' : '');
+}
+
+function reorderBullet(btn, dir) {
+  const row = btn.closest('.bullet-input-row');
+  const list = row.parentElement;
+  const rows = [...list.querySelectorAll('.bullet-input-row')];
+  const i = rows.indexOf(row);
+  const target = rows[i + dir];
+  if (!target) return;
+  if (dir === -1) list.insertBefore(row, target);
+  else list.insertBefore(target, row);
+  syncResume();
 }
 
 function toggleEntry(header) {
@@ -2140,6 +2236,211 @@ function toggleCurrentJob(idx) {
   if (endInput) endInput.disabled = cb?.checked;
   syncResume();
 }
+
+// ── REORDER ENTRIES ───────────────────────────────────────────
+function reorderEntry(btn, dir) {
+  const card = btn.closest('.entry-card');
+  const list = card.parentElement;
+  const cards = [...list.querySelectorAll('.entry-card')];
+  const i = cards.indexOf(card);
+  const target = cards[i + dir];
+  if (!target) return;
+  if (dir === -1) list.insertBefore(card, target);
+  else list.insertBefore(target, card);
+  syncResume();
+}
+
+// ── DUPLICATE EXPERIENCE ENTRY ────────────────────────────────
+function duplicateExpEntry(btn) {
+  const card = btn.closest('.entry-card');
+  const idx = card.dataset.idx;
+  // Collect current values
+  const role    = elById(`exp-role-${idx}`)?.value || '';
+  const company = elById(`exp-company-${idx}`)?.value || '';
+  const start   = elById(`exp-start-${idx}`)?.value || '';
+  const end     = elById(`exp-end-${idx}`)?.value || '';
+  const loc     = elById(`exp-loc-${idx}`)?.value || '';
+  const domain  = elById(`exp-domain-${idx}`)?.value || '';
+  const bullets = [...(elById(`exp-bullets-${idx}`)?.querySelectorAll('.bullet-input') || [])].map(i => i.value);
+  // Add new entry and populate
+  addExp();
+  const newIdx = expIdx - 1;
+  setField(`exp-role-${newIdx}`, role);
+  setField(`exp-company-${newIdx}`, company);
+  setField(`exp-start-${newIdx}`, start);
+  setField(`exp-end-${newIdx}`, end);
+  setField(`exp-loc-${newIdx}`, loc);
+  setField(`exp-domain-${newIdx}`, domain);
+  // Clear the auto-added empty bullet, then fill
+  const bList = elById(`exp-bullets-${newIdx}`);
+  if (bList) {
+    bList.innerHTML = '';
+    bullets.forEach(b => addBullet(`exp-bullets-${newIdx}`, b));
+    if (!bullets.length) addBullet(`exp-bullets-${newIdx}`);
+  }
+  updateExpHeader(newIdx);
+  syncResume();
+  showToast('Entry duplicated — scroll down to edit the copy');
+}
+
+// ── AUTO-SAVE to localStorage ─────────────────────────────────
+const LS_KEY = 'cs_autosave_v1';
+function autoSave() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify({ rb, ts: Date.now() })); } catch(e) {}
+}
+function hasSavedResume() {
+  try { const d = localStorage.getItem(LS_KEY); return d ? JSON.parse(d) : null; } catch(e) { return null; }
+}
+function clearSave() { try { localStorage.removeItem(LS_KEY); } catch(e) {} }
+
+function restoreFromSave(saved) {
+  const { rb: s } = saved;
+  if (!s) return;
+  // Personal
+  Object.entries(s.personal || {}).forEach(([k, v]) => setField(`b-${k}`, v));
+  // Summary bullets
+  if (Array.isArray(s.summary) && s.summary.length) {
+    const cont = elById('summary-bullets-container');
+    if (cont) { cont.innerHTML = ''; s.summary.forEach(b => addSummaryBullet(b)); }
+  }
+  // Template
+  if (s.template) selectTemplate(s.template);
+  // Experience
+  const expList = elById('exp-list');
+  if (expList && s.experience?.length) {
+    expList.innerHTML = ''; expIdx = 0;
+    s.experience.forEach(e => {
+      addExp();
+      const i = expIdx - 1;
+      setField(`exp-role-${i}`, e.role); setField(`exp-company-${i}`, e.company);
+      setField(`exp-start-${i}`, e.start); setField(`exp-end-${i}`, e.end||'');
+      setField(`exp-loc-${i}`, e.location||''); setField(`exp-domain-${i}`, e.domain||'');
+      const bl = elById(`exp-bullets-${i}`);
+      if (bl) { bl.innerHTML = ''; (e.bullets||[]).forEach(b => addBullet(`exp-bullets-${i}`, b)); if (!e.bullets?.length) addBullet(`exp-bullets-${i}`); }
+      updateExpHeader(i);
+    });
+  }
+  // Education
+  const eduList = elById('edu-list');
+  if (eduList && s.education?.length) {
+    eduList.innerHTML = ''; eduIdx = 0;
+    s.education.forEach(e => {
+      addEdu();
+      const i = eduIdx - 1;
+      setField(`edu-inst-${i}`, e.institution); setField(`edu-degree-${i}`, e.degree);
+      setField(`edu-field-${i}`, e.field||''); setField(`edu-year-${i}`, e.year||'');
+      setField(`edu-gpa-${i}`, e.gpa||''); updateEduHeader(i);
+    });
+  }
+  // Skills
+  setField('b-skills-tech', s.skills?.tech||''); setField('b-skills-soft', s.skills?.soft||''); setField('b-skills-tools', s.skills?.tools||'');
+  // Certifications
+  const certList = elById('cert-list');
+  if (certList && s.certifications?.length) {
+    certList.innerHTML = ''; certIdx = 0;
+    s.certifications.forEach(c => {
+      addCert();
+      const i = certIdx - 1;
+      setField(`cert-name-${i}`, c.name||''); setField(`cert-org-${i}`, c.org||''); setField(`cert-year-${i}`, c.year||'');
+    });
+  }
+  syncResume();
+}
+
+// ── UNDO LAST AI CHANGE ───────────────────────────────────────
+let _undoSnapshot = null;
+let _undoTimer = null;
+function saveUndoSnapshot() {
+  syncResume();
+  _undoSnapshot = JSON.parse(JSON.stringify(rb));
+}
+function showUndoBanner(label) {
+  let banner = elById('undo-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'undo-banner';
+    banner.className = 'undo-banner';
+    document.body.appendChild(banner);
+  }
+  banner.innerHTML = `<span>✦ ${escHtml(label)} applied</span><button onclick="undoLastAI()">↩ Undo</button><span style="cursor:pointer;margin-left:4px;opacity:.5" onclick="hideUndoBanner()">✕</span>`;
+  banner.style.display = 'flex';
+  clearTimeout(_undoTimer);
+  _undoTimer = setTimeout(hideUndoBanner, 8000);
+}
+function hideUndoBanner() {
+  const b = elById('undo-banner'); if (b) b.style.display = 'none';
+}
+function undoLastAI() {
+  if (!_undoSnapshot) return;
+  restoreFromSave({ rb: _undoSnapshot });
+  _undoSnapshot = null;
+  hideUndoBanner();
+  showToast('Undone ✓');
+}
+
+
+// ── STEP COMPLETION DETECTION ─────────────────────────────────
+function isStepComplete(n) {
+  const p = rb.personal;
+  switch(n) {
+    case 0: return !!rb.template;
+    case 1: return !!(p.name && p.email);
+    case 2: return rb.summary.length >= 2;
+    case 3: return rb.experience.some(e => e.role && e.company);
+    case 4: return rb.education.some(e => e.institution);
+    case 5: return !!(rb.skills.tech);
+    case 6: return true; // optional
+    case 7: return true; // optional
+    case 8: return true;
+    default: return false;
+  }
+}
+
+// ── ACCENT COLOR PICKER ───────────────────────────────────────
+const ACCENT_COLORS = [
+  { label:'Navy', value:'#2b4da8' },
+  { label:'Teal', value:'#0d9488' },
+  { label:'Violet', value:'#7c3aed' },
+  { label:'Slate', value:'#334155' },
+  { label:'Rose', value:'#e11d48' },
+  { label:'Amber', value:'#b45309' },
+];
+let selectedAccent = '#2b4da8';
+function renderColorPicker() {
+  const cont = elById('accent-color-picker');
+  if (!cont) return;
+  cont.innerHTML = ACCENT_COLORS.map(c =>
+    `<div class="color-swatch${c.value===selectedAccent?' selected':''}" style="background:${c.value}" title="${c.label}" onclick="selectAccent('${c.value}',this)"></div>`
+  ).join('');
+}
+function selectAccent(val, el) {
+  selectedAccent = val;
+  document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+  el.classList.add('selected');
+  syncResume();
+}
+
+let selectedSpacing = 'normal';
+const SPACING_SCALE = { compact: 0.85, normal: 1, spacious: 1.15 };
+function selectSpacing(val, btn) {
+  selectedSpacing = val;
+  document.querySelectorAll('[id^="sp-"]').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  syncResume();
+}
+
+// ── STEP TIPS ─────────────────────────────────────────────────
+const STEP_TIPS = [
+  null, // template step has no tip
+  '💡 <strong>ATS tip:</strong> Use your exact target job title as your headline — recruiters filter on this first.',
+  '💡 <strong>Summary tip:</strong> Lead with your certification and years of experience. Each bullet = one distinct value you bring.',
+  '💡 <strong>Experience tip:</strong> Start each bullet with a strong action verb. Add at least one metric per role (%, $, team size, time saved).',
+  '💡 <strong>Education tip:</strong> List most recent first. Include GPA only if above 3.5 / 7.0.',
+  '💡 <strong>Skills tip:</strong> Match skills keywords directly from job descriptions. ATS systems scan for exact matches.',
+  '💡 <strong>Projects tip:</strong> Include live URLs or GitHub links. Quantify impact where possible.',
+  '💡 <strong>Certifications tip:</strong> PMP, AWS, Google certs significantly boost ATS scores in tech-adjacent roles.',
+  null
+];
 
 // ── AI ASSIST ─────────────────────────
 async function aiSuggestBullets(idx) {
@@ -2209,15 +2510,8 @@ async function aiSuggestProjBullets(idx) {
 
 function insertBullet(listId, itemEl) {
   const text = itemEl.textContent.replace(/^\+\s*/, '');
-  const list = elById(listId);
-  if (!list) return;
-  const row = document.createElement('div');
-  row.className = 'bullet-input-row';
-  row.innerHTML = `<input class="bullet-input" value="${escAttr(text)}" oninput="syncResume()">
-    <button class="bullet-remove-btn" onclick="this.closest('.bullet-input-row').remove();syncResume()">✕</button>`;
-  list.appendChild(row);
+  addBullet(listId, text);
   itemEl.closest('.ai-suggestions-box')?.classList.add('hidden');
-  syncResume();
   showToast('Bullet added ✓');
 }
 
@@ -2249,13 +2543,15 @@ async function aiGenerate(sectionType, idx) {
   let btn = null;
   if (sectionType === 'summary') {
     btn = document.getElementById('gen-summary-btn');
-    syncResume(); // ensure rb is fresh
+    saveUndoSnapshot();
+    syncResume();
     context = [val('b-name'), val('b-title'), rb.experience.slice(0,2).map(e => `${e.role} at ${e.company}`).filter(Boolean).join(', ')].filter(Boolean).join('. ');
     extra = rb.skills.tech;
   } else if (sectionType === 'skills') {
     syncResume();
     context = [val('b-title'), rb.experience.map(e => e.role).filter(Boolean).join(', ')].filter(Boolean).join('. ');
   } else if (sectionType === 'exp_description') {
+    saveUndoSnapshot();
     const role = val(`exp-role-${idx}`);
     const company = val(`exp-company-${idx}`);
     context = `${role} at ${company}`;
@@ -2278,7 +2574,7 @@ async function aiGenerate(sectionType, idx) {
         cont.innerHTML = '';
         bullets.forEach(b => addSummaryBullet(b));
         if (!bullets.length) addSummaryBullet();
-        syncResume(); showToast('Summary generated ✓');
+        syncResume(); showToast('Summary generated ✓'); showUndoBanner('Generate from profile');
       } else showToast('No content returned — try again', true);
     } else if (sectionType === 'skills') {
       const f = elById('b-skills-tech');
@@ -2298,14 +2594,9 @@ async function aiGenerate(sectionType, idx) {
     } else if (sectionType === 'exp_description' && d.bullets) {
       const list = elById(`exp-bullets-${idx}`);
       if (list) {
-        d.bullets.forEach(b => {
-          const row = document.createElement('div');
-          row.className = 'bullet-input-row';
-          row.innerHTML = `<input class="bullet-input" value="${escAttr(b)}" oninput="syncResume()">
-            <button class="bullet-remove-btn" onclick="this.closest('.bullet-input-row').remove();syncResume()">✕</button>`;
-          list.appendChild(row);
-        });
+        d.bullets.forEach(b => addBullet(`exp-bullets-${idx}`, b));
         syncResume();
+        showUndoBanner('AI Write from Role');
         showToast('Bullets generated ✓');
       }
     }
@@ -2356,6 +2647,7 @@ function _setSummaryBullets(bullets) {
 async function aiImproveSummary() {
   const bullets = _getSummaryBullets();
   if (!bullets.length) { showToast('Add some summary bullets first', true); return; }
+  saveUndoSnapshot();
   const btn = document.querySelector('[onclick="aiImproveSummary()"]');
   if (btn) { btn.disabled = true; btn.textContent = '✦ Improving…'; }
   try {
@@ -2368,7 +2660,7 @@ async function aiImproveSummary() {
     if (d.improved) {
       const improved = d.improved.split(/[•\n]+/).map(l => l.trim()).filter(l => l.length > 10).slice(0, 5);
       _setSummaryBullets(improved);
-      showToast('Summary improved ✓');
+      showUndoBanner('AI Improve');
     } else showToast('No improvement returned — try again', true);
   } catch(err) { showToast('Improve failed: ' + err.message, true);
   } finally { if (btn) { btn.disabled = false; btn.textContent = '⟳ AI Improve'; } }
@@ -2379,6 +2671,7 @@ async function tailorSummary() {
   const jd = elById('tailor-jd-summary')?.value?.trim();
   if (!bullets.length) { showToast('Add summary bullets first', true); return; }
   if (!jd) { showToast('Paste a job description first', true); return; }
+  saveUndoSnapshot();
   const btn = document.querySelector('[onclick="tailorSummary()"]');
   if (btn) { btn.disabled = true; btn.textContent = '✦ Tailoring…'; }
   try {
@@ -2393,6 +2686,7 @@ async function tailorSummary() {
       _setSummaryBullets(tailored);
       if (d.keywords_added?.length) showToast(`Tailored ✓ — added: ${d.keywords_added.slice(0,3).join(', ')}`);
       else showToast('Tailored ✓');
+      showUndoBanner('Tailor for Job');
     } else showToast('Tailoring failed — try again', true);
   } catch(err) { showToast('Tailoring failed: ' + err.message, true);
   } finally { if (btn) { btn.disabled = false; btn.textContent = 'Apply Tailoring'; } }
@@ -2555,8 +2849,11 @@ function exportResumePDF() {
     return { ...e, bullets: b.slice(0, 5) };
   });
 
-  const accent = { modern: '#1a237e', classic: '#1a1a1a', minimal: '#555' }[snap.template] || '#1a1a1a';
-  const sidebarBg = snap.template === 'modern' ? '#1a237e' : '#2d3748';
+  const accent = snap.template === 'modern'
+    ? selectedAccent
+    : snap.template === 'classic' ? selectedAccent : '#555';
+  const sidebarBg = snap.template === 'modern' ? selectedAccent : '#2d3748';
+  const spacingScale = SPACING_SCALE[selectedSpacing] || 1;
 
   const html = buildPDFHtml(snap, accent, sidebarBg);
 
@@ -2869,13 +3166,7 @@ async function autoFillFromResume() {
         if (list) {
           list.innerHTML = '';
           const bullets = exp.bullets?.length ? exp.bullets : [''];
-          bullets.forEach(b => {
-            const row = document.createElement('div');
-            row.className = 'bullet-input-row';
-            row.innerHTML = `<input class="bullet-input" value="${escAttr(b)}" oninput="syncResume()">
-              <button class="bullet-remove-btn" onclick="this.closest('.bullet-input-row').remove();syncResume()">✕</button>`;
-            list.appendChild(row);
-          });
+          bullets.forEach(b => addBullet(`exp-bullets-${idx}`, b));
         }
         updateExpHeader(idx);
       });
@@ -2910,13 +3201,7 @@ async function autoFillFromResume() {
         const list = elById(`proj-bullets-${idx}`);
         if (list && proj.bullets?.length) {
           list.innerHTML = '';
-          proj.bullets.forEach(b => {
-            const row = document.createElement('div');
-            row.className = 'bullet-input-row';
-            row.innerHTML = `<input class="bullet-input" value="${escAttr(b)}" oninput="syncResume()">
-              <button class="bullet-remove-btn" onclick="this.closest('.bullet-input-row').remove();syncResume()">✕</button>`;
-            list.appendChild(row);
-          });
+          proj.bullets.forEach(b => addBullet(`proj-bullets-${idx}`, b));
         }
       });
     }
@@ -3024,6 +3309,22 @@ function initBuilder() {
   addSummaryBullet(); // start with one empty summary bullet row
   addExp();
   addEdu();
+  renderColorPicker();
+
+  // Restore saved resume if exists
+  const saved = hasSavedResume();
+  if (saved && saved.rb && (saved.rb.personal?.name || saved.rb.experience?.length)) {
+    const minAgo = Math.round((Date.now() - saved.ts) / 60000);
+    const banner = document.createElement('div');
+    banner.style.cssText = 'background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.25);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:.8rem;';
+    banner.innerHTML = `<span>💾 Draft saved ${minAgo < 2 ? 'just now' : minAgo + ' min ago'} — <strong>${saved.rb.personal?.name || 'resume'}</strong></span>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-primary" style="padding:6px 14px;font-size:.75rem;" onclick="restoreFromSave(JSON.parse(localStorage.getItem('${LS_KEY}')));this.closest('[style]').remove();showToast('Draft restored ✓')">Restore Draft</button>
+        <button class="ai-mini-btn" onclick="clearSave();this.closest('[style]').remove()">Discard</button>
+      </div>`;
+    const stepContent = document.getElementById('builder-step-content');
+    if (stepContent) stepContent.insertAdjacentElement('beforebegin', banner);
+  }
 }
 
 // ── FULL STATE RESET ─────────────────────────────────────────
@@ -3035,7 +3336,8 @@ function fullReset() {
 
   // Reset builder state
   expIdx = 0; eduIdx = 0; projIdx = 0; certIdx = 0;
-  rb = { template: 'modern', personal: {}, summary: '', experience: [], education: [], skills: { tech: '', soft: '', tools: '' }, projects: [], certifications: [] };
+  rb = { template: 'modern', personal: {}, summary: [], experience: [], education: [], skills: { tech: '', soft: '', tools: '' }, projects: [], certifications: [] };
+  clearSave();
   autoFillDone = false;
 
   // Reset all panels to initial state
