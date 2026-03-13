@@ -20,8 +20,31 @@ def parse_resume(raw_text: str) -> dict:
     """
 
     # ── 1. Pre-process: fix ligature encoding & known typos ──────────
+    import unicodedata
     text = raw_text
-    text = text.replace('\ue09d', 'ft').replace('\ue117', 'ft')
+
+    # Normalize Unicode: NFC first to combine composed forms
+    text = unicodedata.normalize('NFC', text)
+
+    # Fix known PDF font ligature encodings (Private Use Area + standard ligatures)
+    PUA_MAP = {
+        '\ue09d': 'ft', '\ue117': 'ft', '\ufb01': 'fi', '\ufb02': 'fl',
+        '\ufb03': 'ffi', '\ufb04': 'ffl', '\ufb05': 'st', '\ufb06': 'st',
+        '\ue004': 'Th', '\ue005': 'th', '\ue003': 'Th',
+        '\u2019': "'", '\u2018': "'", '\u201c': '"', '\u201d': '"',
+        '\u2013': '–', '\u2014': '—', '\u00a0': ' ',
+    }
+    for bad, good in PUA_MAP.items():
+        text = text.replace(bad, good)
+
+    # Strip remaining unmapped Private Use Area characters (U+E000–U+F8FF)
+    # that pdfplumber can't decode — replace with empty string
+    text = re.sub(r'[\ue000-\uf8ff]', '', text)
+
+    # Strip the WHITE SQUARE □ (U+25A1) and REPLACEMENT CHAR which indicate
+    # unreadable glyphs — remove rather than keep garbled output
+    text = re.sub(r'[\u25a1\ufffd\ufffc]', '', text)
+
     text = re.sub(r'\bso\s*ware\b',  'software', text, flags=re.IGNORECASE)
     text = re.sub(r'\bSo\s*Ware\b',  'Software', text, flags=re.IGNORECASE)
     text = re.sub(r'\bAus\b(?=\s+\d{4})', 'Aug', text)   # "Aus 2022" → "Aug 2022"

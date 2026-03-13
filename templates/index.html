@@ -1851,12 +1851,19 @@ function renderWizard() {
   const atsBar = document.getElementById('live-ats-bar');
   if (atsBar) atsBar.style.display = bStep >= 1 ? 'flex' : 'none';
 
+  // Show/hide live preview pane based on step
+  const right = elById('builder-right');
+  if (right) right.style.display = bStep >= 1 ? 'block' : 'none';
+
   // Re-render preview if on review step
   if (bStep === 8) syncResume();
 }
 
 function goStep(n) {
-  if (n <= bStep + 1) { bStep = n; renderWizard(); }
+  // Allow going to any already-visited step OR the next unvisited step
+  if (n <= Math.max(bStep, 1) || n === bStep + 1 || isStepComplete(n - 1)) {
+    bStep = n; renderWizard();
+  }
 }
 
 // ── TEMPLATE SELECTION ───────────────
@@ -2373,6 +2380,9 @@ function restoreFromSave(saved) {
     });
   }
   syncResume();
+  // Navigate to Personal step so user sees their restored data
+  bStep = 1;
+  renderWizard();
 }
 
 // ── UNDO LAST AI CHANGE ───────────────────────────────────────
@@ -3280,13 +3290,7 @@ async function autoFillFromResume() {
             const list = elById(`exp-bullets-${i}`);
             if (list) {
               list.innerHTML = '';
-              d2.bullets.forEach(b => {
-                const row = document.createElement('div');
-                row.className = 'bullet-input-row';
-                row.innerHTML = `<input class="bullet-input" value="${escAttr(b)}" oninput="syncResume()">
-                  <button class="bullet-remove-btn" onclick="this.closest('.bullet-input-row').remove();syncResume()">✕</button>`;
-                list.appendChild(row);
-              });
+              d2.bullets.forEach(b => addBullet(`exp-bullets-${i}`, b));
             }
           }
         } catch (e) { /* bullet fill failed silently — user still has existing ones */ }
@@ -3298,13 +3302,18 @@ async function autoFillFromResume() {
     updateLiveATS();
 
     if (banner) {
-      banner.querySelector('.autofill-status').textContent = '✓ Resume imported — all fields filled. Review and edit below';
+      banner.querySelector('.autofill-status').textContent = '✓ Resume imported — review and edit each section below';
       banner.style.background = 'rgba(0,230,118,.08)';
       banner.style.borderColor = 'rgba(0,230,118,.3)';
       banner.querySelector('.autofill-status').style.color = 'var(--green)';
       setTimeout(() => { banner.style.display = 'none'; }, 4000);
     }
-    showToast('Resume auto-filled ✓ — review each section');
+
+    // Navigate to Personal step so user sees their data immediately
+    bStep = 1;
+    renderWizard();
+    showPanel('builder');
+    showToast('Resume auto-filled ✓ — review and edit each section');
 
   } catch (err) {
     if (banner) banner.style.display = 'none';
@@ -3323,14 +3332,6 @@ let _builderInited = false;
 function initBuilder() {
   if (_builderInited) return;
   _builderInited = true;
-
-  // Show preview pane when user moves past template step
-  const origBNext = window.bNext;
-  window.bNext = function() {
-    origBNext && origBNext();
-    const right = elById('builder-right');
-    if (right && bStep >= 1) right.style.display = 'block';
-  };
 
   renderWizard();
   addSummaryBullet(); // seed one empty summary bullet row
