@@ -877,6 +877,8 @@
 
       <!-- ── BUILDER ── -->
       <div class="panel" id="panel-builder">
+        <div class="builder-wrap">
+        <div id="builder-left">
 
 
         <!-- Autofill Banner -->
@@ -1113,10 +1115,25 @@
             </div>
           </div>
 
+        <!-- Builder + Preview static layout -->
         </div><!-- /builder-step-content -->
+      </div><!-- /builder-left -->
 
-        <!-- Builder + Preview layout -->
+      <!-- Live Preview Pane (right column) -->
+      <div id="builder-right" style="display:none;">
+        <div class="preview-pane" style="position:sticky;top:20px;">
+          <div class="preview-toolbar">
+            <span class="preview-toolbar-label">Live Preview</span>
+            <button class="ai-mini-btn" onclick="exportResumePDF()">↓ Export PDF</button>
+          </div>
+          <div class="preview-scroll">
+            <div id="resume-preview-content" style="padding:0;"></div>
+          </div>
+        </div>
       </div>
+
+    </div><!-- /builder-wrap -->
+    </div><!-- /panel-builder -->
 
     </main>
   </div>
@@ -1896,7 +1913,9 @@ function syncResume() {
       institution: val(`edu-inst-${idx}`),
       degree:      val(`edu-degree-${idx}`),
       field:       val(`edu-field-${idx}`),
-      year:        val(`edu-year-${idx}`),
+      start:       val(`edu-start-${idx}`),
+      end:         val(`edu-end-${idx}`),
+      location:    val(`edu-loc-${idx}`),
       gpa:         val(`edu-gpa-${idx}`),
     });
   });
@@ -2085,13 +2104,19 @@ function addEdu() {
           <div class="form-group"><label class="form-label">Degree *</label>
             <input class="field-input" id="edu-degree-${idx}" placeholder="B.Tech" oninput="updateEduHeader(${idx});syncResume()"></div>
         </div>
-        <div class="form-row cols-3">
+        <div class="form-row cols-2">
           <div class="form-group"><label class="form-label">Field of Study</label>
             <input class="field-input" id="edu-field-${idx}" placeholder="Electronics & Comm." oninput="syncResume()"></div>
-          <div class="form-group"><label class="form-label">Year</label>
-            <input class="field-input" id="edu-year-${idx}" placeholder="2016" oninput="syncResume()"></div>
           <div class="form-group"><label class="form-label">GPA / %</label>
             <input class="field-input" id="edu-gpa-${idx}" placeholder="8.5 / 10" oninput="syncResume()"></div>
+        </div>
+        <div class="form-row cols-3">
+          <div class="form-group"><label class="form-label">Start</label>
+            <input class="field-input" id="edu-start-${idx}" placeholder="2012" oninput="syncResume()"></div>
+          <div class="form-group"><label class="form-label">End / Year</label>
+            <input class="field-input" id="edu-end-${idx}" placeholder="2016" oninput="syncResume()"></div>
+          <div class="form-group"><label class="form-label">Location</label>
+            <input class="field-input" id="edu-loc-${idx}" placeholder="Chennai" oninput="syncResume()"></div>
         </div>
       </div>
     </div>`;
@@ -2107,10 +2132,12 @@ function addProj() {
   div.innerHTML = `
     <div class="entry-card-header" onclick="toggleEntry(this)">
       <div>
-        <div class="entry-card-title">New Project</div>
+        <div class="entry-card-title" id="proj-header-${idx}">New Project</div>
         <div class="entry-card-sub">Add project details</div>
       </div>
       <div class="entry-card-actions">
+        <button class="entry-reorder-btn" onclick="event.stopPropagation();reorderEntry(this,-1)" title="Move up">↑</button>
+        <button class="entry-reorder-btn" onclick="event.stopPropagation();reorderEntry(this,1)" title="Move down">↓</button>
         <button class="entry-toggle">▾</button>
         <button class="entry-delete" onclick="event.stopPropagation();this.closest('.entry-card').remove();syncResume()">✕</button>
       </div>
@@ -2119,7 +2146,7 @@ function addProj() {
       <div class="builder-form">
         <div class="form-row cols-2">
           <div class="form-group"><label class="form-label">Project Name *</label>
-            <input class="field-input" id="proj-name-${idx}" placeholder="CareerScope AI" oninput="syncResume()"></div>
+            <input class="field-input" id="proj-name-${idx}" placeholder="CareerScope AI" oninput="this.closest('.entry-card').querySelector('.entry-card-title').textContent=this.value||'New Project';syncResume()"></div>
           <div class="form-group"><label class="form-label">URL / GitHub</label>
             <input class="field-input" id="proj-url-${idx}" placeholder="github.com/you/project" oninput="syncResume()"></div>
         </div>
@@ -2131,6 +2158,7 @@ function addProj() {
           <button class="add-bullet-btn" onclick="addBullet('proj-bullets-${idx}')">+ Add Point</button>
           <div class="ai-assist-row">
             <button class="ai-mini-btn" onclick="aiSuggestProjBullets(${idx})">✦ AI Suggest Points</button>
+            <button class="ai-mini-btn" onclick="aiGenerate('proj_description', ${idx})">⟳ AI Write from Project</button>
           </div>
           <div class="ai-suggestions-box hidden" id="proj-suggestions-${idx}"></div>
         </div>
@@ -2328,7 +2356,7 @@ function restoreFromSave(saved) {
       addEdu();
       const i = eduIdx - 1;
       setField(`edu-inst-${i}`, e.institution); setField(`edu-degree-${i}`, e.degree);
-      setField(`edu-field-${i}`, e.field||''); setField(`edu-year-${i}`, e.year||'');
+      setField(`edu-field-${i}`, e.field||''); setField(`edu-start-${i}`, e.start||e.year||''); setField(`edu-end-${i}`, e.end||''); setField(`edu-loc-${i}`, e.location||'');
       setField(`edu-gpa-${i}`, e.gpa||''); updateEduHeader(i);
     });
   }
@@ -2555,6 +2583,11 @@ async function aiGenerate(sectionType, idx) {
     const role = val(`exp-role-${idx}`);
     const company = val(`exp-company-${idx}`);
     context = `${role} at ${company}`;
+  } else if (sectionType === 'proj_description') {
+    saveUndoSnapshot();
+    const name = val(`proj-name-${idx}`);
+    const tech = val(`proj-tech-${idx}`);
+    context = `Project: ${name}. Tech stack: ${tech}`;
   }
 
   if (btn) { btn.disabled = true; btn.textContent = '✦ Generating…'; }
@@ -2598,6 +2631,15 @@ async function aiGenerate(sectionType, idx) {
         syncResume();
         showUndoBanner('AI Write from Role');
         showToast('Bullets generated ✓');
+      }
+    } else if (sectionType === 'proj_description' && (d.bullets || d.content)) {
+      const list = elById(`proj-bullets-${idx}`);
+      if (list) {
+        const bullets = d.bullets || d.content.split(/[•\n]+/).map(l=>l.trim()).filter(l=>l.length>8);
+        bullets.forEach(b => addBullet(`proj-bullets-${idx}`, b));
+        syncResume();
+        showUndoBanner('AI Write from Project');
+        showToast('Project highlights generated ✓');
       }
     }
   } catch(err) {
@@ -2744,7 +2786,7 @@ function renderModern() {
       ${(Array.isArray(rb.summary)?rb.summary.join(' '):rb.summary) ? `<div class="rm-main-title">Summary</div><div class="rm-summary">${esc(Array.isArray(rb.summary)?rb.summary.join(' '):Array.isArray(rb.summary)?rb.summary.join(' '):rb.summary)}</div>` : ''}
       ${rb.experience.length ? `<div class="rm-main-title">Experience</div>${rb.experience.map(e => `<div class="rm-entry"><div class="rm-exp-title">${esc(e.role)}</div><div class="rm-exp-meta">${esc(e.company)}${e.location ? ` · ${esc(e.location)}` : ''}${e.start ? ` | ${esc(e.start)} – ${esc(e.end)}` : ''}</div>${e.bullets.map(b => `<div class="rm-bullet">${esc(b)}</div>`).join('')}</div>`).join('')}` : ''}
       ${rb.projects.length ? `<div class="rm-main-title">Projects</div>${rb.projects.map(p => `<div class="rm-entry"><div class="rm-exp-title">${esc(p.name)}${p.tech ? ` <span style="font-weight:400;color:#555;font-size:8px;">(${esc(p.tech)})</span>` : ''}</div>${p.bullets.map(b => `<div class="rm-bullet">${esc(b)}</div>`).join('')}</div>`).join('')}` : ''}
-      ${rb.education.length ? `<div class="rm-main-title">Education</div>${rb.education.map(e => `<div class="rm-entry"><div class="rm-exp-title">${esc(e.degree)}${e.field ? ` in ${esc(e.field)}` : ''}</div><div class="rm-exp-meta">${esc(e.institution)}${e.year ? ` · ${esc(e.year)}` : ''}${e.gpa ? ` · GPA ${esc(e.gpa)}` : ''}</div></div>`).join('')}` : ''}
+      ${rb.education.length ? `<div class="rm-main-title">Education</div>${rb.education.map(e => { const edate = e.start&&e.end?e.start+'–'+e.end:e.end||e.start||e.year||''; return `<div class="rm-entry"><div class="rm-exp-title">${esc(e.degree)}${e.field ? ` in ${esc(e.field)}` : ''}</div><div class="rm-exp-meta">${esc(e.institution)}${edate ? ` · ${esc(edate)}` : ''}${e.gpa ? ` · GPA ${esc(e.gpa)}` : ''}</div></div>`; }).join('')}` : ''}
     </div>
   </div>`;
 }
@@ -2785,7 +2827,7 @@ function renderClassic() {
       <div class="rc2-edu">
         <div class="rc2-edu-row">
           <span class="rc2-edu-deg">${esc(e.degree)}${e.field?' – '+esc(e.field):''}</span>
-          <span class="rc2-date">${e.year||''}${e.gpa?' · GPA '+esc(e.gpa):''}</span>
+          <span class="rc2-date">${(e.start&&e.end?e.start+'–'+e.end:e.end||e.start||e.year||'')}${e.gpa?' · GPA '+esc(e.gpa):''}</span>
         </div>
         <div class="rc2-inst">${esc(e.institution)}</div>
       </div>`).join('')}`:''}
@@ -2808,7 +2850,7 @@ function renderMinimal() {
     ${rb.experience.length ? `<div class="rmin-section-title">Experience</div>${rb.experience.map(e => `<div class="rmin-entry"><div class="rmin-exp-title">${esc(e.role)} — ${esc(e.company)}</div><div class="rmin-exp-meta">${[e.location, e.start ? `${e.start} – ${e.end}` : ''].filter(Boolean).join(' · ')}</div>${e.bullets.map(b => `<div class="rmin-bullet">${esc(b)}</div>`).join('')}</div>`).join('')}` : ''}
     ${rb.skills.tech ? `<div class="rmin-section-title">Skills</div><div class="rmin-skill-group"><span class="rmin-skill-items">${esc(rb.skills.tech)}</span></div>${rb.skills.soft ? `<div class="rmin-skill-group"><span class="rmin-skill-cat">Leadership: </span><span class="rmin-skill-items">${esc(rb.skills.soft)}</span></div>` : ''}${rb.skills.tools ? `<div class="rmin-skill-group"><span class="rmin-skill-cat">Tools: </span><span class="rmin-skill-items">${esc(rb.skills.tools)}</span></div>` : ''}` : ''}
     ${rb.projects.length ? `<div class="rmin-section-title">Projects</div>${rb.projects.map(p => `<div class="rmin-entry"><div class="rmin-exp-title">${esc(p.name)}${p.tech ? ` <span style="font-weight:400;color:#888;"> · ${esc(p.tech)}</span>` : ''}</div>${p.bullets.map(b => `<div class="rmin-bullet">${esc(b)}</div>`).join('')}</div>`).join('')}` : ''}
-    ${rb.education.length ? `<div class="rmin-section-title">Education</div>${rb.education.map(e => `<div class="rmin-entry"><div class="rmin-exp-title">${esc(e.degree)}${e.field ? `, ${esc(e.field)}` : ''}</div><div class="rmin-exp-meta">${esc(e.institution)}${e.year ? ` · ${esc(e.year)}` : ''}${e.gpa ? ' · GPA ' + esc(e.gpa) : ''}</div></div>`).join('')}` : ''}
+    ${rb.education.length ? `<div class="rmin-section-title">Education</div>${rb.education.map(e => { const edate = e.start&&e.end?e.start+'–'+e.end:e.end||e.start||e.year||''; return `<div class="rmin-entry"><div class="rmin-exp-title">${esc(e.degree)}${e.field ? `, ${esc(e.field)}` : ''}</div><div class="rmin-exp-meta">${esc(e.institution)}${edate ? ` · ${esc(edate)}` : ''}${e.gpa ? ' · GPA ' + esc(e.gpa) : ''}</div></div>`; }).join('')}` : ''}
     ${rb.certifications.length ? `<div class="rmin-section-title">Certifications</div>${rb.certifications.map(c => `<div style="font-size:8.5px;margin-bottom:3px;color:#444;">${esc(c.name)}${c.issuer ? ` · ${esc(c.issuer)}` : ''}${c.year ? ` · ${esc(c.year)}` : ''}</div>`).join('')}` : ''}
   </div>`;
 }
@@ -2904,7 +2946,7 @@ function buildPDFHtml(s, accent, sidebarBg) {
           <div class="m-entry">
             <div class="m-exp-row">
               <div class="m-exp-title">${x(e.degree||'')}${e.field?' – '+x(e.field):''}</div>
-              <div class="m-exp-date">${x(e.year||'')}${e.gpa?' · GPA '+x(e.gpa):''}</div>
+              <div class="m-exp-date">${x(e.start&&e.end?e.start+'–'+e.end:e.end||e.start||e.year||'')}${e.gpa?' · GPA '+x(e.gpa):''}</div>
             </div>
             <div class="m-exp-company">${x(e.institution||'')}</div>
           </div>`).join('')}` : ''}
@@ -2996,7 +3038,7 @@ ${s.experience.filter(e=>e.role).map(e=>`<div class="exp-entry">
 </div>`).join('')}`:''}
 ${s.education.filter(e=>e.institution).length?`<div class="sec">Education</div>
 ${s.education.filter(e=>e.institution).map(e=>`<div class="edu-entry">
-  <div class="edu-row"><span class="edu-deg">${x(e.degree||'')}${e.field?' – '+x(e.field):''}</span><span class="edu-yr">${x(e.year||'')}${e.gpa?' · GPA '+x(e.gpa):''}</span></div>
+  <div class="edu-row"><span class="edu-deg">${x(e.degree||'')}${e.field?' – '+x(e.field):''}</span><span class="edu-yr">${x(e.start&&e.end?e.start+'–'+e.end:e.end||e.start||e.year||'')}${e.gpa?' · GPA '+x(e.gpa):''}</span></div>
   <div class="edu-inst">${x(e.institution||'')}</div>
   ${e.sub_institution?`<div class="edu-inst" style="font-style:italic;color:#555;font-size:7.5px;">${x(e.sub_institution)}</div>`:''}
 </div>`).join('')}`:''}
@@ -3054,7 +3096,7 @@ ${s.skills.soft?`<div class="mn-skill-line"><span class="mn-skill-cat">Leadershi
 ${s.skills.tools?`<div class="mn-skill-line"><span class="mn-skill-cat">Tools: </span>${x(s.skills.tools)}</div>`:''}`:''}
 ${s.education.filter(e=>e.institution).length?`<div class="mn-section">Education</div>${s.education.filter(e=>e.institution).map(e=>`
 <div class="mn-entry">
-  <div class="mn-exp-row"><div class="mn-exp-title">${x(e.degree||'')}${e.field?', '+x(e.field):''}</div><div class="mn-exp-date">${x(e.year||'')}${e.gpa?' · GPA '+x(e.gpa):''}</div></div>
+  <div class="mn-exp-row"><div class="mn-exp-title">${x(e.degree||'')}${e.field?', '+x(e.field):''}</div><div class="mn-exp-date">${x(e.start&&e.end?e.start+'–'+e.end:e.end||e.start||e.year||'')}${e.gpa?' · GPA '+x(e.gpa):''}</div></div>
   <div class="mn-exp-company">${x(e.institution||'')}</div>
 </div>`).join('')}`:''}
 ${s.projects.filter(p=>p.name).length?`<div class="mn-section">Projects</div>${s.projects.filter(p=>p.name).map(p=>`
@@ -3182,7 +3224,9 @@ async function autoFillFromResume() {
         setField(`edu-inst-${idx}`,   edu.institution);
         setField(`edu-degree-${idx}`, edu.degree);
         setField(`edu-field-${idx}`,  edu.field);
-        setField(`edu-year-${idx}`,   edu.year);
+        setField(`edu-start-${idx}`,  edu.start || edu.year || '');
+        setField(`edu-end-${idx}`,    edu.end   || '');
+        setField(`edu-loc-${idx}`,    edu.location || '');
         setField(`edu-gpa-${idx}`,    edu.gpa);
         updateEduHeader(idx);
       });
@@ -3275,29 +3319,12 @@ function setField(id, value) {
 }
 
 // ── INIT BUILDER ──────────────────────
+let _builderInited = false;
 function initBuilder() {
-  // Add preview pane to builder panel
-  const panel = elById('panel-builder');
-  if (!panel) return;
+  if (_builderInited) return;
+  _builderInited = true;
 
-  // Wrap content in builder layout
-  const content = panel.innerHTML;
-  panel.innerHTML = `<div class="builder-wrap">
-    <div id="builder-left">${content}</div>
-    <div id="builder-right" style="display:none;">
-      <div class="preview-pane">
-        <div class="preview-toolbar">
-          <span class="preview-toolbar-label">Live Preview</span>
-          <button class="ai-mini-btn" onclick="exportResumePDF()">↓ Export PDF</button>
-        </div>
-        <div class="preview-scroll">
-          <div id="resume-preview-content" style="padding:0;"></div>
-        </div>
-      </div>
-    </div>
-  </div>`;
-
-  // Show preview pane once user starts filling (from step 1)
+  // Show preview pane when user moves past template step
   const origBNext = window.bNext;
   window.bNext = function() {
     origBNext && origBNext();
@@ -3306,24 +3333,24 @@ function initBuilder() {
   };
 
   renderWizard();
-  addSummaryBullet(); // start with one empty summary bullet row
+  addSummaryBullet(); // seed one empty summary bullet row
   addExp();
   addEdu();
   renderColorPicker();
 
-  // Restore saved resume if exists
+  // Restore saved draft if exists
   const saved = hasSavedResume();
   if (saved && saved.rb && (saved.rb.personal?.name || saved.rb.experience?.length)) {
     const minAgo = Math.round((Date.now() - saved.ts) / 60000);
     const banner = document.createElement('div');
     banner.style.cssText = 'background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.25);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:.8rem;';
-    banner.innerHTML = `<span>💾 Draft saved ${minAgo < 2 ? 'just now' : minAgo + ' min ago'} — <strong>${saved.rb.personal?.name || 'resume'}</strong></span>
+    banner.innerHTML = `<span>💾 Draft saved ${minAgo < 2 ? 'just now' : minAgo + ' min ago'} — <strong>${escHtml(saved.rb.personal?.name || 'resume')}</strong></span>
       <div style="display:flex;gap:8px;">
-        <button class="btn btn-primary" style="padding:6px 14px;font-size:.75rem;" onclick="restoreFromSave(JSON.parse(localStorage.getItem('${LS_KEY}')));this.closest('[style]').remove();showToast('Draft restored ✓')">Restore Draft</button>
-        <button class="ai-mini-btn" onclick="clearSave();this.closest('[style]').remove()">Discard</button>
+        <button class="btn btn-primary" style="padding:6px 14px;font-size:.75rem;" onclick="restoreFromSave(hasSavedResume());this.closest('div[style]').remove();showToast('Draft restored ✓')">Restore Draft</button>
+        <button class="ai-mini-btn" onclick="clearSave();this.closest('div[style]').remove()">Discard</button>
       </div>`;
-    const stepContent = document.getElementById('builder-step-content');
-    if (stepContent) stepContent.insertAdjacentElement('beforebegin', banner);
+    const wizardEl = document.getElementById('wizard-steps');
+    if (wizardEl) wizardEl.insertAdjacentElement('beforebegin', banner);
   }
 }
 
