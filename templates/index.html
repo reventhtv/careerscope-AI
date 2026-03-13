@@ -966,20 +966,20 @@
             <div class="section-title">Professional Summary</div>
             <div class="builder-form">
               <div class="form-group">
-                <label class="form-label">Summary / Objective</label>
-                <textarea class="field-textarea" id="b-summary" rows="5" placeholder="Write 3-4 summary bullets. In Classic template, each line becomes a bullet point.
-• Technical Program Manager with X years of experience...
-• Specialised in...
-• Proven track record in..." oninput="syncResume()" style="min-height:120px;"></textarea>
+                <label class="form-label">Summary Bullets
+                  <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-mut)"> – 4 to 5 bullets, each one focused idea</span>
+                </label>
+                <div id="summary-bullets-container" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;"></div>
+                <button class="add-entry-btn" style="margin-bottom:10px;padding:5px 12px;font-size:.7rem;" onclick="addSummaryBullet()">+ Add Bullet</button>
                 <div class="ai-assist-row">
-                  <button class="ai-mini-btn" onclick="aiGenerate('summary')" id="gen-summary-btn">✦ Generate from profile</button>
-                  <button class="ai-mini-btn" onclick="aiImprove('b-summary', 'summary')">⟳ AI Improve</button>
+                  <button class="ai-mini-btn" onclick="aiGenerateSummary()" id="gen-summary-btn">✦ Generate from profile</button>
+                  <button class="ai-mini-btn" onclick="aiImproveSummary()">⟳ AI Improve</button>
                   <button class="ai-mini-btn" id="tailor-summary-btn" onclick="showTailorInput('summary')">◈ Tailor for Job</button>
                 </div>
                 <div class="tailor-section hidden" id="tailor-summary-box">
                   <div class="tailor-label">✦ Tailor for Job Description</div>
                   <textarea class="field-textarea" id="tailor-jd-summary" placeholder="Paste job description here…" style="min-height:80px;margin-bottom:8px;"></textarea>
-                  <button class="ai-mini-btn" onclick="tailorSection('b-summary', 'tailor-jd-summary')">Apply Tailoring</button>
+                  <button class="ai-mini-btn" onclick="tailorSummary()">Apply Tailoring</button>
                 </div>
               </div>
             </div>
@@ -1811,7 +1811,11 @@ function syncResume() {
     portfolio: val('b-portfolio'),
     website:   val('b-website'),
   };
-  rb.summary = val('b-summary');
+  rb.summary = [];
+  document.querySelectorAll('#summary-bullets-container .bullet-input').forEach(inp => {
+    const v = inp.value.trim();
+    if (v) rb.summary.push(v);
+  });
   rb.skills  = { tech: val('b-skills-tech'), soft: val('b-skills-soft'), tools: val('b-skills-tools') };
 
   // Sync experience
@@ -1903,7 +1907,7 @@ function updateLiveATS() {
 
   const hasExp = rb.experience.length > 0;
   const hasEdu = rb.education.length > 0;
-  const struct = Math.round(((hasExp ? 1 : 0) + (hasEdu ? 1 : 0) + (rb.summary ? 1 : 0) + (rb.skills.tech ? 1 : 0)) / 4 * 100);
+  const struct = Math.round(((hasExp ? 1 : 0) + (hasEdu ? 1 : 0) + (rb.summary.length > 0 ? 1 : 0) + (rb.skills.tech ? 1 : 0)) / 4 * 100);
 
   const score = Math.round((contact + kw + quant + action + struct) / 5);
 
@@ -1923,7 +1927,7 @@ function resumeToText() {
   const eduText = rb.education.map(e => `${e.degree} ${e.field} ${e.institution}`).join(' ');
   const certText = rb.certifications.map(c => `${c.name} ${c.issuer}`).join(' ');
   const projText = rb.projects.map(p => `${p.name} ${p.bullets.join(' ')}`).join(' ');
-  return [p.name, p.title, p.email, p.phone, rb.summary, expText, eduText, rb.skills.tech, rb.skills.soft, projText, certText].join(' ');
+  return [p.name, p.title, p.email, p.phone, Array.isArray(rb.summary) ? rb.summary.join(' ') : rb.summary, expText, eduText, rb.skills.tech, rb.skills.soft, projText, certText].join(' ');
 }
 
 // ── ADD ENTRIES ───────────────────────
@@ -2268,9 +2272,14 @@ async function aiGenerate(sectionType, idx) {
     const d = await r.json();
 
     if (sectionType === 'summary') {
-      const f = elById('b-summary');
-      if (f && d.content) { f.value = d.content; syncResume(); showToast('Summary generated ✓'); }
-      else showToast('No content returned — try again', true);
+      const cont = document.getElementById('summary-bullets-container');
+      if (cont && d.content) {
+        const bullets = d.content.split(/[•\n]+/).map(l=>l.trim()).filter(l=>l.length>10).slice(0,5);
+        cont.innerHTML = '';
+        bullets.forEach(b => addSummaryBullet(b));
+        if (!bullets.length) addSummaryBullet();
+        syncResume(); showToast('Summary generated ✓');
+      } else showToast('No content returned — try again', true);
     } else if (sectionType === 'skills') {
       const f = elById('b-skills-tech');
       if (f && d.content) {
@@ -2310,6 +2319,83 @@ async function aiGenerate(sectionType, idx) {
 function showTailorInput(section) {
   const box = elById(`tailor-${section}-box`);
   if (box) box.classList.toggle('hidden');
+}
+
+// ── SUMMARY BULLET HELPERS ─────────────────────────────────────
+
+function addSummaryBullet(text) {
+  const cont = document.getElementById('summary-bullets-container');
+  if (!cont) return;
+  // Enforce max 5 bullets
+  if (cont.querySelectorAll('.bullet-input-row').length >= 5) {
+    showToast('Maximum 5 summary bullets reached', true); return;
+  }
+  const row = document.createElement('div');
+  row.className = 'bullet-input-row';
+  row.innerHTML = `<span style="color:var(--text-mut);padding:0 6px 0 2px;flex-shrink:0;font-size:1rem;line-height:1;">•</span>
+    <input class="bullet-input" style="flex:1;" value="${escAttr(text||'')}" placeholder="Describe your background, skill, or achievement…" oninput="syncResume()">
+    <button class="bullet-remove-btn" onclick="this.closest('.bullet-input-row').remove();syncResume()">✕</button>`;
+  cont.appendChild(row);
+  syncResume();
+}
+
+function _getSummaryBullets() {
+  return Array.from(document.querySelectorAll('#summary-bullets-container .bullet-input'))
+    .map(i => i.value.trim()).filter(Boolean);
+}
+
+function _setSummaryBullets(bullets) {
+  const cont = document.getElementById('summary-bullets-container');
+  if (!cont) return;
+  cont.innerHTML = '';
+  bullets.slice(0, 5).forEach(b => addSummaryBullet(b));
+  if (!bullets.length) addSummaryBullet();
+  syncResume();
+}
+
+async function aiImproveSummary() {
+  const bullets = _getSummaryBullets();
+  if (!bullets.length) { showToast('Add some summary bullets first', true); return; }
+  const btn = document.querySelector('[onclick="aiImproveSummary()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '✦ Improving…'; }
+  try {
+    const r = await fetch('/api/ai-resume-assist', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'improve_text', context: bullets.join('\n'), section_type: 'summary' })
+    });
+    if (!r.ok) throw new Error(`Server error ${r.status}`);
+    const d = await r.json();
+    if (d.improved) {
+      const improved = d.improved.split(/[•\n]+/).map(l => l.trim()).filter(l => l.length > 10).slice(0, 5);
+      _setSummaryBullets(improved);
+      showToast('Summary improved ✓');
+    } else showToast('No improvement returned — try again', true);
+  } catch(err) { showToast('Improve failed: ' + err.message, true);
+  } finally { if (btn) { btn.disabled = false; btn.textContent = '⟳ AI Improve'; } }
+}
+
+async function tailorSummary() {
+  const bullets = _getSummaryBullets();
+  const jd = elById('tailor-jd-summary')?.value?.trim();
+  if (!bullets.length) { showToast('Add summary bullets first', true); return; }
+  if (!jd) { showToast('Paste a job description first', true); return; }
+  const btn = document.querySelector('[onclick="tailorSummary()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '✦ Tailoring…'; }
+  try {
+    const r = await fetch('/api/ai-resume-assist', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'tailor_resume', context: bullets.join('\n'), extra: jd, section_type: 'summary' })
+    });
+    if (!r.ok) throw new Error(`Server error ${r.status}`);
+    const d = await r.json();
+    if (d.tailored) {
+      const tailored = d.tailored.split(/[•\n]+/).map(l => l.trim()).filter(l => l.length > 10).slice(0, 5);
+      _setSummaryBullets(tailored);
+      if (d.keywords_added?.length) showToast(`Tailored ✓ — added: ${d.keywords_added.slice(0,3).join(', ')}`);
+      else showToast('Tailored ✓');
+    } else showToast('Tailoring failed — try again', true);
+  } catch(err) { showToast('Tailoring failed: ' + err.message, true);
+  } finally { if (btn) { btn.disabled = false; btn.textContent = 'Apply Tailoring'; } }
 }
 
 async function tailorSection(fieldId, jdFieldId) {
@@ -2361,7 +2447,7 @@ function renderModern() {
       ${rb.certifications.length ? `<div class="rm-section-title">Certifications</div>${rb.certifications.map(c => `<div class="rm-contact-item">${esc(c.name)}${c.year ? ` · ${esc(c.year)}` : ''}</div>`).join('')}` : ''}
     </div>
     <div class="rm-main">
-      ${rb.summary ? `<div class="rm-main-title">Summary</div><div class="rm-summary">${esc(rb.summary)}</div>` : ''}
+      ${(Array.isArray(rb.summary)?rb.summary.join(' '):rb.summary) ? `<div class="rm-main-title">Summary</div><div class="rm-summary">${esc(Array.isArray(rb.summary)?rb.summary.join(' '):Array.isArray(rb.summary)?rb.summary.join(' '):rb.summary)}</div>` : ''}
       ${rb.experience.length ? `<div class="rm-main-title">Experience</div>${rb.experience.map(e => `<div class="rm-entry"><div class="rm-exp-title">${esc(e.role)}</div><div class="rm-exp-meta">${esc(e.company)}${e.location ? ` · ${esc(e.location)}` : ''}${e.start ? ` | ${esc(e.start)} – ${esc(e.end)}` : ''}</div>${e.bullets.map(b => `<div class="rm-bullet">${esc(b)}</div>`).join('')}</div>`).join('')}` : ''}
       ${rb.projects.length ? `<div class="rm-main-title">Projects</div>${rb.projects.map(p => `<div class="rm-entry"><div class="rm-exp-title">${esc(p.name)}${p.tech ? ` <span style="font-weight:400;color:#555;font-size:8px;">(${esc(p.tech)})</span>` : ''}</div>${p.bullets.map(b => `<div class="rm-bullet">${esc(b)}</div>`).join('')}</div>`).join('')}` : ''}
       ${rb.education.length ? `<div class="rm-main-title">Education</div>${rb.education.map(e => `<div class="rm-entry"><div class="rm-exp-title">${esc(e.degree)}${e.field ? ` in ${esc(e.field)}` : ''}</div><div class="rm-exp-meta">${esc(e.institution)}${e.year ? ` · ${esc(e.year)}` : ''}${e.gpa ? ` · GPA ${esc(e.gpa)}` : ''}</div></div>`).join('')}` : ''}
@@ -2380,9 +2466,9 @@ function renderClassic() {
   if (p.website)   contacts.push(`🌐 ${esc(p.website)}`);
 
   // Summary bullets: split by • or newline
-  const sumBullets = rb.summary
-    ? rb.summary.split(/[•\n]/).map(l=>l.trim()).filter(l=>l.length>5)
-    : [];
+  const sumBullets = Array.isArray(rb.summary)
+    ? rb.summary.filter(b => b.trim())
+    : [];  // rb.summary is always array; fallback for safety
 
   return `<div class="resume-doc resume-classic">
     <div class="rc2-hdr">
@@ -2424,7 +2510,7 @@ function renderMinimal() {
     <div class="rmin-name">${esc(p.name) || 'Your Name'}</div>
     ${p.title ? `<div class="rmin-title">${esc(p.title)}</div>` : ''}
     <div class="rmin-contacts">${contacts.map(c => `<span>${esc(c)}</span>`).join('')}</div>
-    ${rb.summary ? `<div class="rmin-section-title">About</div><div class="rmin-summary">${esc(rb.summary)}</div>` : ''}
+    ${(Array.isArray(rb.summary)?rb.summary.join(' '):rb.summary) ? `<div class="rmin-section-title">About</div><div class="rmin-summary">${esc(Array.isArray(rb.summary)?rb.summary.join(' '):Array.isArray(rb.summary)?rb.summary.join(' '):rb.summary)}</div>` : ''}
     ${rb.experience.length ? `<div class="rmin-section-title">Experience</div>${rb.experience.map(e => `<div class="rmin-entry"><div class="rmin-exp-title">${esc(e.role)} — ${esc(e.company)}</div><div class="rmin-exp-meta">${[e.location, e.start ? `${e.start} – ${e.end}` : ''].filter(Boolean).join(' · ')}</div>${e.bullets.map(b => `<div class="rmin-bullet">${esc(b)}</div>`).join('')}</div>`).join('')}` : ''}
     ${rb.skills.tech ? `<div class="rmin-section-title">Skills</div><div class="rmin-skill-group"><span class="rmin-skill-items">${esc(rb.skills.tech)}</span></div>${rb.skills.soft ? `<div class="rmin-skill-group"><span class="rmin-skill-cat">Leadership: </span><span class="rmin-skill-items">${esc(rb.skills.soft)}</span></div>` : ''}${rb.skills.tools ? `<div class="rmin-skill-group"><span class="rmin-skill-cat">Tools: </span><span class="rmin-skill-items">${esc(rb.skills.tools)}</span></div>` : ''}` : ''}
     ${rb.projects.length ? `<div class="rmin-section-title">Projects</div>${rb.projects.map(p => `<div class="rmin-entry"><div class="rmin-exp-title">${esc(p.name)}${p.tech ? ` <span style="font-weight:400;color:#888;"> · ${esc(p.tech)}</span>` : ''}</div>${p.bullets.map(b => `<div class="rmin-bullet">${esc(b)}</div>`).join('')}</div>`).join('')}` : ''}
@@ -2455,7 +2541,7 @@ function exportResumePDF() {
   syncResume();
   const name = rb.personal.name || 'Resume';
 
-  if (!rb.personal.name && !rb.summary && rb.experience.every(e => !e.role)) {
+  if (!rb.personal.name && !rb.summary.length && rb.experience.every(e => !e.role)) {
     showToast('Fill in your resume first', true); return;
   }
 
@@ -2507,7 +2593,7 @@ function buildPDFHtml(s, accent, sidebarBg) {
 
     const mainHtml = `
       <div class="main">
-        ${s.summary ? `<div class="m-section-title">PROFESSIONAL SUMMARY</div><div class="m-summary">${x(s.summary)}</div>` : ''}
+        ${(Array.isArray(s.summary)?s.summary.join(' '):s.summary) ? `<div class="m-section-title">PROFESSIONAL SUMMARY</div><div class="m-summary">${x(Array.isArray(s.summary)?s.summary.join(' '):s.summary)}</div>` : ''}
         ${s.experience.length ? `<div class="m-section-title">EXPERIENCE</div>${s.experience.filter(e=>e.role).map(e=>`
           <div class="m-entry">
             <div class="m-exp-row">
@@ -2603,9 +2689,8 @@ body{font-family:Calibri,'Segoe UI',Arial,sans-serif;background:#fff;color:#1a1a
   ${p.title?`<div class="hdr-title">${x(p.title)}</div>`:''}
   <div class="hdr-contacts">${contacts.map((c,i)=>`${i?'<span class="hdr-sep">|</span>':''}${c}`).join('')}</div>
 </div>
-${s.summary?`<div class="sec">Summary</div>
-${s.summary.split(/[•\n]/).map(l=>l.trim()).filter(l=>l.length>5).map(l=>`<div class="sum-bullet"><span style="flex-shrink:0;color:#444;">•</span><span>${x(l)}</span></div>`).join('')}`:''}
-${s.experience.filter(e=>e.role).length?`<div class="sec">Professional Experience</div>
+${(Array.isArray(s.summary) ? s.summary : []).filter(b=>b.trim()).length ? `<div class="sec">Summary</div>
+${(Array.isArray(s.summary) ? s.summary : []).filter(b=>b.trim()).map(b=>`<div class="sum-bullet"><span style="flex-shrink:0;color:#444;">•</span><span>${x(b)}</span></div>`).join('')}` : ''}${s.experience.filter(e=>e.role).length?`<div class="sec">Professional Experience</div>
 ${s.experience.filter(e=>e.role).map(e=>`<div class="exp-entry">
   <div class="role-bar">${x(e.role)}</div>
   <div class="co-row"><span class="co-name">${x(e.company||'')}${e.location?' · '+x(e.location):''}</span><span class="co-date">${x(e.start||'')}${e.end?' – '+x(e.end):''}</span></div>
@@ -2659,7 +2744,7 @@ body{font-family:Calibri,'Helvetica Neue',Helvetica,Arial,sans-serif;padding:12m
 <div class="mn-name">${x(p.name)||'Your Name'}</div>
 ${p.title?`<div class="mn-title">${x(p.title)}</div>`:''}
 <div class="mn-contacts">${contacts.map(c=>`<span>${x(c)}</span>`).join('')}</div>
-${s.summary?`<div class="mn-section">About</div><div class="mn-summary">${x(s.summary)}</div>`:''}
+${(Array.isArray(s.summary)?s.summary.join(' '):s.summary)?`<div class="mn-section">About</div><div class="mn-summary">${x(Array.isArray(s.summary)?s.summary.join(' '):s.summary)}</div>`:''}
 ${s.experience.filter(e=>e.role).length?`<div class="mn-section">Experience</div>${s.experience.filter(e=>e.role).map(e=>`
 <div class="mn-entry">
   <div class="mn-exp-row"><div class="mn-exp-title">${x(e.role)} — ${x(e.company||'')}</div><div class="mn-exp-date">${x(e.start||'')}${e.end?' – '+x(e.end):''}</div></div>
@@ -2728,7 +2813,27 @@ async function autoFillFromResume() {
     setField('b-website',   p.website);
 
     // Summary
-    if (d.summary) setField('b-summary', d.summary);
+    // Populate summary as bullet rows
+    if (d.summary) {
+      const rawSum = d.summary.trim();
+      // Split on bullet characters or sentence boundaries
+      let bullets = rawSum.split(/[•\n]+/).map(l => l.trim()).filter(l => l.length > 10);
+      // If only 1 item (unsplit paragraph), try splitting on '. '
+      if (bullets.length <= 1) {
+        bullets = rawSum.split(/\.\s+(?=[A-Z])/).map(l => l.replace(/\.$/,'').trim()).filter(l => l.length > 10);
+      }
+      // Cap at 5 bullets
+      bullets = bullets.slice(0, 5);
+      const cont = document.getElementById('summary-bullets-container');
+      if (cont) {
+        cont.innerHTML = '';
+        bullets.forEach(b => addSummaryBullet(b));
+        if (bullets.length === 0) addSummaryBullet(); // at least one empty row
+      }
+    } else {
+      const cont = document.getElementById('summary-bullets-container');
+      if (cont && cont.children.length === 0) addSummaryBullet();
+    }
 
     // Skills
     if (d.skills) {
@@ -2916,6 +3021,7 @@ function initBuilder() {
   };
 
   renderWizard();
+  addSummaryBullet(); // start with one empty summary bullet row
   addExp();
   addEdu();
 }

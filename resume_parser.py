@@ -92,6 +92,7 @@ def parse_resume(raw_text: str) -> dict:
             'location': '', 'linkedin': '', 'portfolio': '', 'website': '',
         },
         'summary':        '',
+        '_sum_bullets':   [],
         'experience':     [],
         'education':      [],
         'skills':         {'tech': '', 'soft': '', 'tools': '', 'metrics': ''},
@@ -161,8 +162,17 @@ def parse_resume(raw_text: str) -> dict:
 
         # ── SUMMARY ─────────────────────────────────────────────────
         if section == 'summary':
-            clean = re.sub(r'^[•*]\s*', '', line)
-            result['summary'] += (' ' if result['summary'] else '') + clean
+            is_bullet_start = bool(re.match(r'^[•*\u2013\u2014\u25b8\-]\s+', line))
+            if is_bullet_start:
+                # Start of a new bullet — strip the bullet char and store
+                clean = re.sub(r'^[•*\u2013\u2014\u25b8\-]\s*', '', line).strip()
+                result['_sum_bullets'].append(clean)
+            elif result['_sum_bullets']:
+                # Continuation line — append to last bullet
+                result['_sum_bullets'][-1] += ' ' + line.strip()
+            else:
+                # Plain prose line (no bullet chars in the resume)
+                result['_sum_bullets'].append(line.strip())
             continue
 
         # ── EXPERIENCE ──────────────────────────────────────────────
@@ -399,9 +409,15 @@ def parse_resume(raw_text: str) -> dict:
         ]
         result['skills']['tech'] = ', '.join(raw_items[:15])
 
-    # ── 8. Post-process: Summary — cap at 2 sentences ────────────────
-    sents = re.split(r'(?<=[.!?])\s+', result['summary'].strip())
-    result['summary'] = ' '.join(sents[:2]).strip()
+    # ── 8. Post-process: Summary — convert reconstructed bullets to \n-joined string ──
+    if result['_sum_bullets']:
+        # Each item is one reconstructed bullet; cap at 5
+        result['summary'] = '\n'.join(b.strip() for b in result['_sum_bullets'][:5] if b.strip())
+    elif result['summary']:
+        # Fallback: plain prose — split on sentence boundaries, cap at 5
+        sents = re.split(r'(?<=[.!?])\s+', result['summary'].strip())
+        result['summary'] = '\n'.join(sents[:5])
+    del result['_sum_bullets']
 
 
     # ── 9. Post-process: Certifications — infer from summary if no section found ──
