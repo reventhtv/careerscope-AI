@@ -419,8 +419,40 @@
 
 
     /* ══════════════ RESUME BUILDER ══════════════ */
-    .builder-wrap { display: grid; grid-template-columns: 1fr 420px; gap: 28px; align-items: start; }
-    @media (max-width: 1200px) { .builder-wrap { grid-template-columns: 1fr; } }
+    /* Two-panel layout: form scrolls, preview sticks */
+    .builder-wrap {
+      display: grid;
+      grid-template-columns: minmax(0,1fr) 440px;
+      gap: 32px;
+      align-items: start;
+      min-height: calc(100vh - 160px);
+    }
+    #builder-left {
+      min-height: 400px;
+      display: flex;
+      flex-direction: column;
+    }
+    #builder-step-content {
+      flex: 1;
+      min-height: 300px;
+    }
+    .builder-step {
+      display: block;
+    }
+    .builder-step.hidden {
+      display: none !important;
+    }
+    #builder-right {
+      position: sticky;
+      top: 0;
+      max-height: 85vh;
+      overflow: hidden;
+      border-radius: var(--radius);
+    }
+    @media (max-width: 1100px) {
+      .builder-wrap { grid-template-columns: 1fr; gap: 24px; }
+      #builder-right { position: relative; max-height: 60vh; }
+    }
 
     /* Wizard stepper */
     .wizard-steps { display: flex; align-items: center; gap: 0; margin-bottom: 32px; overflow-x: auto; padding-bottom: 4px; }
@@ -440,7 +472,8 @@
     .wstep-connector.done { background: var(--green); }
 
     /* Template picker */
-    .template-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 24px; }
+    .template-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+    @media (max-width: 900px) { .template-grid { grid-template-columns: repeat(2, 1fr); } }
     .template-card { background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius); padding: 14px; cursor: pointer; transition: all .2s; position: relative; }
     .template-card:hover { border-color: var(--border-hover); }
     .template-card.selected { border-color: var(--accent); box-shadow: 0 0 20px var(--accent-glow); }
@@ -956,6 +989,20 @@
                 </div>
                 <div class="template-name">Minimal</div>
               </div>
+              <div class="template-card" data-tpl="executive" onclick="selectTemplate('executive')">
+                <div class="template-preview">
+                  <div style="padding:8px;background:#fff;height:100%;display:flex;flex-direction:column;gap:4px;">
+                    <div style="text-align:center;padding-bottom:5px;border-bottom:2px solid #1a1a2e;">
+                      <div class="tprev-line" style="width:70%;height:5px;margin:0 auto 3px;background:#1a1a2e;"></div>
+                      <div class="tprev-line" style="width:45%;height:2px;margin:0 auto 2px;background:#888;"></div>
+                      <div class="tprev-line" style="width:80%;height:2px;margin:0 auto;background:#aaa;"></div>
+                    </div>
+                    <div style="margin-top:4px;"><div class="tprev-line" style="width:40%;height:2px;background:#1a1a2e;margin-bottom:3px;"></div><div style="height:1px;background:#1a1a2e;margin-bottom:4px;"></div><div class="tprev-line"></div><div class="tprev-line short"></div></div>
+                    <div style="margin-top:3px;"><div class="tprev-line" style="width:40%;height:2px;background:#1a1a2e;margin-bottom:3px;"></div><div style="height:1px;background:#1a1a2e;margin-bottom:4px;"></div><div class="tprev-line"></div><div class="tprev-line short"></div></div>
+                  </div>
+                </div>
+                <div class="template-name">Executive</div>
+              </div>
             </div>
             <div class="step-nav">
               <div></div>
@@ -978,6 +1025,9 @@
                 </div>
               </div>
             </div>
+          </div><!-- /bstep-0 -->
+
+          <!-- STEP 1: Personal -->
           <div class="builder-step hidden" id="bstep-1">
             <div class="section-title">Personal Information</div>
             <div class="builder-form">
@@ -1812,7 +1862,13 @@ let rb = {
 };
 
 // ── STEP NAVIGATION ──────────────────
-function bNext() { if (bStep < STEPS.length - 1) { bStep++; renderWizard(); } }
+function bNext() {
+  if (bStep < STEPS.length - 1) {
+    bStep++;
+    if (bStep > _maxVisitedStep) _maxVisitedStep = bStep;
+    renderWizard();
+  }
+}
 function bPrev() { if (bStep > 0) { bStep--; renderWizard(); } }
 
 function renderWizard() {
@@ -1835,10 +1891,11 @@ function renderWizard() {
     </div>${connector}`;
   }).join('');
 
-  // Show/hide steps
-  document.querySelectorAll('.builder-step').forEach((el, i) =>
-    el.classList.toggle('hidden', i !== bStep)
-  );
+  // Show/hide steps by ID — robust, not dependent on DOM order
+  for (let i = 0; i < STEPS.length; i++) {
+    const el = document.getElementById(`bstep-${i}`);
+    if (el) el.classList.toggle('hidden', i !== bStep);
+  }
 
   // Inject step tip
   const tipEl = document.getElementById('builder-step-tip');
@@ -1859,10 +1916,14 @@ function renderWizard() {
   if (bStep === 8) syncResume();
 }
 
+let _maxVisitedStep = 0;
 function goStep(n) {
-  // Allow going to any already-visited step OR the next unvisited step
-  if (n <= Math.max(bStep, 1) || n === bStep + 1 || isStepComplete(n - 1)) {
-    bStep = n; renderWizard();
+  if (n < 0 || n >= STEPS.length) return;
+  // Allow free navigation to any already-visited step, the next step, or if prior step is complete
+  if (n <= _maxVisitedStep || n === bStep + 1 || isStepComplete(n - 1)) {
+    bStep = n;
+    if (n > _maxVisitedStep) _maxVisitedStep = n;
+    renderWizard();
   }
 }
 
@@ -2073,8 +2134,9 @@ function addExp() {
           <div class="bullet-list" id="exp-bullets-${idx}"></div>
           <button class="add-bullet-btn" onclick="addBullet('exp-bullets-${idx}')">+ Add Bullet</button>
           <div class="ai-assist-row">
-            <button class="ai-mini-btn" onclick="aiSuggestBullets(${idx})">✦ AI Suggest Bullets</button>
-            <button class="ai-mini-btn" onclick="aiGenerate('exp_description', ${idx})">⟳ AI Write from Role</button>
+            <button class="ai-mini-btn" onclick="aiSuggestBullets(${idx})">✦ AI Suggest</button>
+            <button class="ai-mini-btn" onclick="aiGenerate('exp_description', ${idx})">⟳ AI Write</button>
+            <button class="ai-mini-btn" style="background:rgba(0,200,150,.12);color:var(--green);border-color:rgba(0,200,150,.3);" onclick="aiWriteForJD(${idx})">🎯 Write for JD</button>
           </div>
           <div class="ai-suggestions-box hidden" id="exp-suggestions-${idx}"></div>
         </div>
@@ -2380,7 +2442,8 @@ function restoreFromSave(saved) {
     });
   }
   syncResume();
-  // Navigate to Personal step so user sees their restored data
+  // Unlock all steps and navigate to Personal
+  _maxVisitedStep = 8;
   bStep = 1;
   renderWizard();
 }
@@ -2472,7 +2535,7 @@ const STEP_TIPS = [
   null, // template step has no tip
   '💡 <strong>ATS tip:</strong> Use your exact target job title as your headline — recruiters filter on this first.',
   '💡 <strong>Summary tip:</strong> Lead with your certification and years of experience. Each bullet = one distinct value you bring.',
-  '💡 <strong>Experience tip:</strong> Start each bullet with a strong action verb. Add at least one metric per role (%, $, team size, time saved).',
+  '💡 <strong>Experience tip:</strong> Start each bullet with a strong action verb and add a metric (%, $, team size). Use <strong>🎯 Write for JD</strong> to generate bullets tailored to a specific job description.',
   '💡 <strong>Education tip:</strong> List most recent first. Include GPA only if above 3.5 / 7.0.',
   '💡 <strong>Skills tip:</strong> Match skills keywords directly from job descriptions. ATS systems scan for exact matches.',
   '💡 <strong>Projects tip:</strong> Include live URLs or GitHub links. Quantify impact where possible.',
@@ -2514,6 +2577,52 @@ async function aiSuggestBullets(idx) {
     box.innerHTML = `<div style="font-family:var(--fm);font-size:.7rem;color:var(--orange);padding:6px;">AI returned unexpected format. Try again in a moment.</div>`;
   } catch(err) {
     box.innerHTML = `<div style="color:var(--orange);font-size:.75rem;padding:6px;">Error: ${escHtml(err.message)}. Please retry.</div>`;
+  }
+}
+
+// ── JD-TARGETED BULLET WRITING ────────────────────────────────
+async function aiWriteForJD(idx) {
+  const role    = val(`exp-role-${idx}`);
+  const company = val(`exp-company-${idx}`);
+  if (!role) { showToast('Enter job title first', true); return; }
+
+  const currentJD = elById('jd-input')?.value?.trim() || jdText;
+  if (!currentJD) {
+    showToast('Paste a Job Description in the Job Match tab first — then come back here.', true);
+    return;
+  }
+
+  saveUndoSnapshot();
+  const box = elById(`exp-suggestions-${idx}`);
+  box.innerHTML = '<div style="font-family:var(--fm);font-size:.7rem;color:var(--text-muted);">✦ Tailoring bullets to job description…</div>';
+  box.classList.remove('hidden');
+
+  try {
+    const r = await fetch('/api/ai-resume-assist', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'suggest_bullets',
+        context: `${role} at ${company}`,
+        extra: `JOB DESCRIPTION:\n${currentJD.slice(0, 1200)}`
+      })
+    });
+    if (!r.ok) throw new Error(`Server error ${r.status}`);
+    const d = await r.json();
+    const bullets = d.bullets?.length ? d.bullets
+      : (d.raw || '').split('\n').map(l => l.replace(/^[-•*\d.]+\s*/,'').trim()).filter(l => l.length > 20);
+
+    if (bullets.length) {
+      box.innerHTML =
+        `<div style="font-family:var(--fm);font-size:.6rem;letter-spacing:1px;text-transform:uppercase;color:var(--green);margin-bottom:6px;">✦ JD-Matched Bullets — click to add</div>` +
+        bullets.slice(0,5).map(b =>
+          `<div class="ai-suggestion-item" onclick="insertBullet('exp-bullets-${idx}',this)">${escHtml(b)}</div>`
+        ).join('');
+      showUndoBanner('JD bullet generation');
+    } else {
+      box.innerHTML = '<div style="color:var(--orange);font-size:.75rem;padding:6px;">No bullets generated. Try again.</div>';
+    }
+  } catch(err) {
+    box.innerHTML = `<div style="color:var(--orange);font-size:.75rem;padding:6px;">Error: ${escHtml(err.message)}</div>`;
   }
 }
 
@@ -2774,7 +2883,27 @@ function renderPreview() {
 
   if (rb.template === 'modern') container.innerHTML = renderModern();
   else if (rb.template === 'classic') container.innerHTML = renderClassic();
+  else if (rb.template === 'executive') container.innerHTML = renderExecutive();
   else container.innerHTML = renderMinimal();
+}
+
+function renderExecutive() {
+  const p = rb.personal;
+  const sumText = Array.isArray(rb.summary) ? rb.summary.join(' ') : rb.summary;
+  return `<div class="resume-doc" style="font-family:'Georgia',serif;color:#1a1a2e;padding:32px 36px;">
+    <div style="text-align:center;border-bottom:2.5px solid #1a1a2e;padding-bottom:14px;margin-bottom:16px;">
+      <div style="font-size:22px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">${esc(p.name)||'Your Name'}</div>
+      <div style="font-size:10px;color:#555;margin-top:4px;letter-spacing:1px;">${esc(p.title)||'Job Title'}</div>
+      <div style="font-size:8px;color:#777;margin-top:6px;display:flex;justify-content:center;gap:16px;flex-wrap:wrap;">
+        ${p.email?`<span>✉ ${esc(p.email)}</span>`:''}${p.phone?`<span>✆ ${esc(p.phone)}</span>`:''}${p.location?`<span>📍 ${esc(p.location)}</span>`:''}${p.linkedin?`<span>🔗 ${esc(p.linkedin)}</span>`:''}
+      </div>
+    </div>
+    ${sumText?`<div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#1a1a2e;border-bottom:1px solid #1a1a2e;padding-bottom:3px;margin-bottom:8px;">Executive Summary</div><div style="font-size:8.5px;color:#333;line-height:1.6;margin-bottom:14px;">${esc(sumText)}</div>`:''}
+    ${rb.experience.length?`<div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#1a1a2e;border-bottom:1px solid #1a1a2e;padding-bottom:3px;margin-bottom:10px;">Professional Experience</div>${rb.experience.map(e=>`<div style="margin-bottom:12px;"><div style="display:flex;justify-content:space-between;align-items:baseline;"><span style="font-size:9.5px;font-weight:700;">${esc(e.role)}</span><span style="font-size:8px;color:#555;">${esc(e.start||'')}${e.end?' – '+esc(e.end):''}</span></div><div style="font-size:8.5px;color:#555;font-style:italic;margin-bottom:5px;">${esc(e.company)}${e.location?' · '+esc(e.location):''}</div>${e.bullets.map(b=>`<div style="font-size:8px;color:#333;padding-left:10px;position:relative;line-height:1.5;margin-bottom:2px;"><span style="position:absolute;left:2px;">▸</span>${esc(b)}</div>`).join('')}</div>`).join('')}`:''}
+    ${rb.education.length?`<div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#1a1a2e;border-bottom:1px solid #1a1a2e;padding-bottom:3px;margin:10px 0 8px;">Education</div>${rb.education.map(e=>{const ed=e.start&&e.end?e.start+'–'+e.end:e.end||e.start||e.year||'';return`<div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:8.5px;"><span><strong>${esc(e.degree)}${e.field?', '+esc(e.field):''}</strong> — ${esc(e.institution)}</span><span style="color:#555;">${esc(ed)}${e.gpa?' · GPA '+esc(e.gpa):''}</span></div>`}).join('')}`:''}
+    ${rb.skills.tech?`<div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#1a1a2e;border-bottom:1px solid #1a1a2e;padding-bottom:3px;margin:10px 0 8px;">Core Competencies</div><div style="font-size:8.5px;color:#333;line-height:1.8;">${rb.skills.tech.split(',').map(s=>`<span style="display:inline-block;margin:2px 8px 2px 0;">◆ ${esc(s.trim())}</span>`).join('')}</div>`:''}
+    ${rb.certifications.length?`<div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#1a1a2e;border-bottom:1px solid #1a1a2e;padding-bottom:3px;margin:10px 0 8px;">Certifications</div>${rb.certifications.map(c=>`<div style="font-size:8.5px;color:#333;margin-bottom:3px;">◆ ${esc(c.name)}${c.issuer?' — '+esc(c.issuer):''}${c.year?' ('+esc(c.year)+')':''}</div>`).join('')}`:''}
+  </div>`;
 }
 
 function renderModern() {
@@ -2901,9 +3030,9 @@ function exportResumePDF() {
     return { ...e, bullets: b.slice(0, 5) };
   });
 
-  const accent = snap.template === 'modern'
-    ? selectedAccent
-    : snap.template === 'classic' ? selectedAccent : '#555';
+  const accent = snap.template === 'executive'
+    ? '#1a1a2e'
+    : selectedAccent;
   const sidebarBg = snap.template === 'modern' ? selectedAccent : '#2d3748';
   const spacingScale = SPACING_SCALE[selectedSpacing] || 1;
 
@@ -3064,6 +3193,51 @@ ${s.projects.filter(p=>p.name).map(p=>`<div class="exp-entry">
 </div>`).join('')}`:''}
 ${s.certifications.filter(c=>c.name).length?`<div class="sec">Certifications</div>
 ${s.certifications.filter(c=>c.name).map(c=>`<div class="cert-line"><strong>${x(c.name)}</strong>${c.issuer?' · '+x(c.issuer):''}${c.year?' · '+x(c.year):''}</div>`).join('')}`:''}
+</body></html>`;
+  }
+
+  /* ── EXECUTIVE template ── */
+  if (s.template === 'executive') {
+    const sumText = Array.isArray(s.summary) ? s.summary.join(' ') : s.summary;
+    const contacts = [p.email&&`✉ ${x(p.email)}`, p.phone&&`✆ ${x(p.phone)}`, p.location&&`📍 ${x(p.location)}`, p.linkedin&&`🔗 ${x(p.linkedin)}`].filter(Boolean);
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${x(p.name)} — Resume</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+@page{size:A4;margin:0}
+body{font-family:Georgia,'Times New Roman',serif;padding:14mm 18mm;background:white;color:#1a1a2e;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:9px;line-height:1.6}
+.ex-name{font-size:22px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-align:center;color:#1a1a2e;margin-bottom:4px}
+.ex-title{font-size:9.5px;text-align:center;color:#555;letter-spacing:1px;margin-bottom:8px}
+.ex-contacts{display:flex;justify-content:center;gap:16px;font-size:8px;color:#666;margin-bottom:10px;flex-wrap:wrap}
+.ex-divider{border:none;border-top:2.5px solid #1a1a2e;margin-bottom:14px}
+.ex-section{font-size:8px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#1a1a2e;border-bottom:1px solid #1a1a2e;padding-bottom:3px;margin:12px 0 8px}
+.ex-summary{font-size:8.5px;color:#333;line-height:1.7;margin-bottom:4px}
+.ex-entry{margin-bottom:11px;page-break-inside:avoid}
+.ex-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px}
+.ex-role{font-size:9.5px;font-weight:700;color:#1a1a2e}
+.ex-date{font-size:8px;color:#555}
+.ex-company{font-size:8.5px;color:#555;font-style:italic;margin-bottom:4px}
+.ex-bullet{font-size:8.5px;color:#333;padding-left:12px;position:relative;line-height:1.55;margin-bottom:2px}
+.ex-bullet::before{content:"▸";position:absolute;left:2px;color:#1a1a2e}
+.ex-skill{display:inline-block;margin:2px 10px 2px 0;font-size:8.5px;color:#333}
+.ex-skill::before{content:"◆ ";color:#1a1a2e;font-size:7px}
+.ex-cert{font-size:8.5px;color:#333;margin-bottom:3px}
+.ex-edu-row{display:flex;justify-content:space-between;align-items:baseline;font-size:8.5px;margin-bottom:4px}
+</style></head><body>
+<div class="ex-name">${x(p.name)||'Your Name'}</div>
+${p.title?`<div class="ex-title">${x(p.title)}</div>`:''}
+<div class="ex-contacts">${contacts.join(' &nbsp;|&nbsp; ')}</div>
+<hr class="ex-divider">
+${sumText?`<div class="ex-section">Executive Summary</div><div class="ex-summary">${x(sumText)}</div>`:''}
+${s.experience.filter(e=>e.role).length?`<div class="ex-section">Professional Experience</div>${s.experience.filter(e=>e.role).map(e=>`
+<div class="ex-entry">
+  <div class="ex-row"><span class="ex-role">${x(e.role)}</span><span class="ex-date">${x(e.start||'')}${e.end?' – '+x(e.end):''}</span></div>
+  <div class="ex-company">${x(e.company||'')}${e.location?' · '+x(e.location):''}</div>
+  ${(e.bullets||[]).filter(b=>b.trim()).map(b=>`<div class="ex-bullet">${x(b)}</div>`).join('')}
+</div>`).join('')}`:''}
+${s.skills.tech?`<div class="ex-section">Core Competencies</div><div>${s.skills.tech.split(',').filter(Boolean).slice(0,14).map(sk=>`<span class="ex-skill">${x(sk.trim())}</span>`).join('')}</div>`:''}
+${s.education.filter(e=>e.institution).length?`<div class="ex-section">Education</div>${s.education.filter(e=>e.institution).map(e=>{const ed=e.start&&e.end?e.start+'–'+e.end:e.end||e.start||e.year||'';return`<div class="ex-edu-row"><span><strong>${x(e.degree||'')}${e.field?', '+x(e.field):''}</strong> — ${x(e.institution||'')}</span><span style="color:#555">${x(ed)}${e.gpa?' · GPA '+x(e.gpa):''}</span></div>`}).join('')}`:''}
+${s.certifications.filter(c=>c.name).length?`<div class="ex-section">Certifications</div>${s.certifications.filter(c=>c.name).map(c=>`<div class="ex-cert">◆ ${x(c.name)}${c.issuer?' — '+x(c.issuer):''}${c.year?' ('+x(c.year)+')':''}</div>`).join('')}`:''}
+${s.projects.filter(p=>p.name).length?`<div class="ex-section">Key Projects</div>${s.projects.filter(p=>p.name).map(p=>`<div class="ex-entry"><div class="ex-role" style="font-size:9px;">${x(p.name)}${p.tech?` <span style="font-weight:400;font-size:8px;color:#666;">(${x(p.tech)})</span>`:''}</div>${(p.bullets||[]).filter(b=>b.trim()).map(b=>`<div class="ex-bullet">${x(b)}</div>`).join('')}</div>`).join('')}`:''}
 </body></html>`;
   }
 
@@ -3309,7 +3483,8 @@ async function autoFillFromResume() {
       setTimeout(() => { banner.style.display = 'none'; }, 4000);
     }
 
-    // Navigate to Personal step so user sees their data immediately
+    // Unlock all steps and navigate to Personal for review
+    _maxVisitedStep = 8;
     bStep = 1;
     renderWizard();
     showPanel('builder');
@@ -3364,6 +3539,7 @@ function fullReset() {
 
   // Reset builder state
   expIdx = 0; eduIdx = 0; projIdx = 0; certIdx = 0;
+  bStep = 0; _maxVisitedStep = 0;
   rb = { template: 'modern', personal: {}, summary: [], experience: [], education: [], skills: { tech: '', soft: '', tools: '' }, projects: [], certifications: [] };
   clearSave();
   autoFillDone = false;
