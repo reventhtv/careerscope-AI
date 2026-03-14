@@ -118,7 +118,7 @@ def parse_resume(raw_text: str) -> dict:
         '_sum_bullets':   [],
         'experience':     [],
         'education':      [],
-        'skills':         {'tech': '', 'soft': '', 'tools': '', 'metrics': ''},
+        'skills':         {'tech': '', 'soft': '', 'tools': ''},
         'projects':       [],
         'certifications': [],
     }
@@ -366,8 +366,8 @@ def parse_resume(raw_text: str) -> dict:
 
     # Locate each category by finding its label → colon start position
     SKILL_CATS = [
-        # Original Maxwell-style labels
-        ('tech_pm',     re.compile(r'Technical Project Management\s*:', re.I)),
+        # Technical Program/Project Management skills
+        ('tech_pm',     re.compile(r'Technical\s+Prog(?:ram|ject)\s+Management\s*:', re.I)),
         ('delivery',    re.compile(r'Product\s*&?\s*Delivery\s+Leadership\s*:', re.I)),
         ('embedded',    re.compile(r'Embedded Systems[^:]*:', re.I)),
         ('domains',     re.compile(r'Domains\s*:', re.I)),
@@ -405,8 +405,12 @@ def parse_resume(raw_text: str) -> dict:
 
     prog_items   = cat_chunks.get('programming', []) + cat_chunks.get('tech_export', []) + cat_chunks.get('cloud_devops', [])
     emb_items    = cat_chunks.get('embedded', [])
-    soft_items   = cat_chunks.get('delivery', []) + cat_chunks.get('soft_export', [])
-    domain_items = cat_chunks.get('domains', []) + cat_chunks.get('dom_export', [])
+    # soft = delivery/leadership + metrics (KPI, ROI) — both map to the soft skills field
+    soft_items   = (cat_chunks.get('delivery', []) + cat_chunks.get('soft_export', [])
+                    + cat_chunks.get('metrics', []))
+    # tools/domains = domain expertise + tech_pm competencies
+    domain_items = (cat_chunks.get('domains', []) + cat_chunks.get('dom_export', [])
+                    + cat_chunks.get('tech_pm', []))
 
     # Deduplicated tech skills: programming tools + embedded
     # Exclude sub-category labels (contain ":") — these come from tech_pm bleeding
@@ -419,9 +423,9 @@ def parse_resume(raw_text: str) -> dict:
 
     metrics_items = cat_chunks.get('metrics', [])
     result['skills']['tech']    = ', '.join(tech_out[:20])
-    result['skills']['soft']    = ', '.join(soft_items[:12])
-    result['skills']['tools']   = ', '.join(domain_items[:8])
-    result['skills']['metrics'] = ', '.join(metrics_items[:8])
+    result['skills']['soft']    = ', '.join(soft_items[:16])
+    result['skills']['tools']   = ', '.join(domain_items[:20])
+    result['skills'].pop('metrics', None)   # not used by frontend
 
     # Fallback: only if ALL structured patterns failed
     if not result['skills']['tech'] and not result['skills']['soft'] and skill_blob:
@@ -432,18 +436,40 @@ def parse_resume(raw_text: str) -> dict:
         ]
         result['skills']['tech'] = ', '.join(raw_items[:15])
 
-    # ── 8. Post-process: Summary — convert reconstructed bullets to \n-joined string ──
+    # ── 8. Post-process: Summary — return as list of bullet strings ──────
+    # The frontend stores rb.summary as string[], one item per bullet row.
     if result['_sum_bullets']:
-        # Each item is one reconstructed bullet; cap at 5
-        result['summary'] = '\n'.join(b.strip() for b in result['_sum_bullets'][:5] if b.strip())
+        summary_list = [b.strip() for b in result['_sum_bullets'][:6] if b.strip()]
     elif result['summary']:
-        # Fallback: plain prose — split on sentence boundaries, cap at 5
-        sents = re.split(r'(?<=[.!?])\s+', result['summary'].strip())
-        result['summary'] = '\n'.join(sents[:5])
+        # Fallback: plain prose — split on bullet chars or sentence boundaries
+        raw = result['summary'].strip()
+        parts = [p.strip() for p in re.split(r'[•\n]+', raw) if p.strip()]
+        if len(parts) <= 1:
+            parts = [s.strip() for s in re.split(r'(?<=[.!?])\s+', raw) if s.strip()]
+        summary_list = parts[:6]
+    else:
+        summary_list = []
+
+    result['summary'] = summary_list           # list of strings
+    # Keep a plain-text version for certifications scan below
+    summary_text = ' '.join(summary_list)
     del result['_sum_bullets']
 
+    # ── 9. Post-process: Education — add start/end fields ─────────────────
+    # The UI now uses start/end rather than a single year field.
+    # For education, graduation year → end; start is typically empty unless both years present.
+    for edu in result['education']:
+        yr = edu.get('year', '')
+        if yr and not edu.get('end'):
+            edu['end']   = yr          # graduation year goes to end
+        if 'start' not in edu:
+            edu['start'] = ''          # ensure field exists
 
-    # ── 9. Post-process: Certifications — infer from summary if no section found ──
+    # ── 10. Post-process: Experience bullets — no truncation ─────────────
+    # Do NOT cap bullets here. User controls page density via the Spacing
+    # control in the builder (Compact / Normal / Spacious).
+
+    # ── 11. Post-process: Certifications — infer from summary if no section found ──
     if not result['certifications']:
         KNOWN_CERTS = {
             'PMP':   ('Project Management Professional', 'PMI Institute'),
@@ -453,7 +479,7 @@ def parse_resume(raw_text: str) -> dict:
             'CSPO':  ('Certified Scrum Product Owner', 'Scrum Alliance'),
             'CISSP': ('CISSP', 'ISC2'),
         }
-        scan = result['personal'].get('title', '') + ' ' + result['summary']
+        scan = result['personal'].get('title', '') + ' ' + summary_text
         added = set()
         for abbr, (full_name, issuer) in KNOWN_CERTS.items():
             if re.search(rf'\b{abbr}\b', scan) and abbr not in added:

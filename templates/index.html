@@ -1018,9 +1018,9 @@
                 <div>
                   <div class="form-label" style="margin-bottom:10px;">Spacing</div>
                   <div style="display:flex;gap:8px;">
-                    <button class="ai-mini-btn" id="sp-compact" onclick="selectSpacing('compact',this)">Compact</button>
-                    <button class="ai-mini-btn selected" id="sp-normal" onclick="selectSpacing('normal',this)">Normal</button>
-                    <button class="ai-mini-btn" id="sp-spacious" onclick="selectSpacing('spacious',this)">Spacious</button>
+                    <button class="ai-mini-btn" id="sp-compact" onclick="selectSpacing('compact',this)" title="Smaller text &amp; tighter spacing — fits more on 1 page">Compact (1-pg)</button>
+                    <button class="ai-mini-btn selected" id="sp-normal" onclick="selectSpacing('normal',this)" title="Standard spacing — typically 1–2 pages">Normal</button>
+                    <button class="ai-mini-btn" id="sp-spacious" onclick="selectSpacing('spacious',this)" title="Larger text &amp; more breathing room — 2-page layout">Spacious (2-pg)</button>
                   </div>
                 </div>
               </div>
@@ -3024,11 +3024,8 @@ function exportResumePDF() {
   const snap = JSON.parse(JSON.stringify(rb));
   // Summary: max 55 words
   snap.summary = truncateSummary(snap.summary, 55);
-  // Bullets: exactly 5 per experience (pad from last bullet if short)
-  snap.experience = snap.experience.map(e => {
-    const b = (e.bullets || []).filter(x => x.trim());
-    return { ...e, bullets: b.slice(0, 5) };
-  });
+  // Keep all bullets — do NOT auto-truncate. User controls length via spacing.
+  // (previously capped at 5 per entry — removed as per user requirement)
 
   const accent = snap.template === 'executive'
     ? '#1a1a2e'
@@ -3036,7 +3033,7 @@ function exportResumePDF() {
   const sidebarBg = snap.template === 'modern' ? selectedAccent : '#2d3748';
   const spacingScale = SPACING_SCALE[selectedSpacing] || 1;
 
-  const html = buildPDFHtml(snap, accent, sidebarBg);
+  const html = buildPDFHtml(snap, accent, sidebarBg, spacingScale);
 
   const win = window.open('', '_blank');
   if (!win) { showToast('Pop-up blocked — allow pop-ups for this site', true); return; }
@@ -3045,7 +3042,7 @@ function exportResumePDF() {
   setTimeout(() => { win.focus(); win.print(); }, 800);
 }
 
-function buildPDFHtml(s, accent, sidebarBg) {
+function buildPDFHtml(s, accent, sidebarBg, spacingScale = 1) {
   const p = s.personal;
   const e = s.escHtml || (t => (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'));
   function x(t) { return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -3100,7 +3097,7 @@ function buildPDFHtml(s, accent, sidebarBg) {
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 @page{size:A4;margin:0}
-body{font-family:Calibri,'Segoe UI',Arial,sans-serif;background:white;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:8.5px}
+body{font-family:Calibri,'Segoe UI',Arial,sans-serif;background:white;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:${8.5*spacingScale}px}
 .wrap{display:flex;width:100%;min-height:297mm;padding:0}
 .sidebar{width:29%;background:${sidebarBg} !important;color:#fff;padding:16px 12px;flex-shrink:0;box-sizing:border-box}
 .main{flex:1;padding:16px 15px;border-left:none;box-sizing:border-box}
@@ -3137,7 +3134,7 @@ body{font-family:Calibri,'Segoe UI',Arial,sans-serif;background:white;color:#111
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 @page{size:A4;margin:0}
-body{font-family:Calibri,'Segoe UI',Arial,sans-serif;background:#fff;color:#1a1a1a;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:8.8px;line-height:1.5;padding:12mm 14mm 12mm 14mm}
+body{font-family:Calibri,'Segoe UI',Arial,sans-serif;background:#fff;color:#1a1a1a;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:${8.8*spacingScale}px;line-height:${1.5*spacingScale};padding:${12*spacingScale}mm 14mm}
 .hdr{text-align:center;padding-bottom:6px;margin-bottom:14px}
 .hdr-name{font-size:22px;font-weight:700;letter-spacing:2px;text-transform:uppercase;font-family:Calibri,'Segoe UI',Arial,sans-serif;color:#0d0d0d;line-height:1.1}
 .hdr-title{font-size:9px;color:#444;margin:3px 0 6px;letter-spacing:.5px;font-style:italic}
@@ -3204,7 +3201,7 @@ ${s.certifications.filter(c=>c.name).map(c=>`<div class="cert-line"><strong>${x(
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 @page{size:A4;margin:0}
-body{font-family:Georgia,'Times New Roman',serif;padding:14mm 18mm;background:white;color:#1a1a2e;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:9px;line-height:1.6}
+body{font-family:Georgia,'Times New Roman',serif;padding:${14*spacingScale}mm 18mm;background:white;color:#1a1a2e;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:${9*spacingScale}px;line-height:${1.6*spacingScale}}
 .ex-name{font-size:22px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-align:center;color:#1a1a2e;margin-bottom:4px}
 .ex-title{font-size:9.5px;text-align:center;color:#555;letter-spacing:1px;margin-bottom:8px}
 .ex-contacts{display:flex;justify-content:center;gap:16px;font-size:8px;color:#666;margin-bottom:10px;flex-wrap:wrap}
@@ -3247,7 +3244,7 @@ ${s.projects.filter(p=>p.name).length?`<div class="ex-section">Key Projects</div
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 @page{size:A4;margin:0}
-body{font-family:Calibri,'Helvetica Neue',Helvetica,Arial,sans-serif;padding:12mm 16mm;background:white;color:#222;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:8.5px;line-height:1.55}
+body{font-family:Calibri,'Helvetica Neue',Helvetica,Arial,sans-serif;padding:${12*spacingScale}mm 16mm;background:white;color:#222;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:${8.5*spacingScale}px;line-height:${1.55*spacingScale}}
 .mn-name{font-size:22px;font-weight:300;letter-spacing:3px;text-transform:uppercase;color:#111;margin-bottom:4px}
 .mn-title{font-size:9px;color:#777;letter-spacing:1px;margin-bottom:8px}
 .mn-contacts{display:flex;gap:14px;font-size:7.5px;color:#888;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #ddd}
@@ -3300,6 +3297,12 @@ async function autoFillFromResume() {
   if (!sessionId || autoFillDone) return;
   autoFillDone = true;
 
+  // ── Clear any stale draft — fresh upload takes precedence ──
+  clearSave();
+
+  // ── Dismiss any restore-draft banner that may be showing ──
+  document.querySelectorAll('[data-restore-banner]').forEach(el => el.remove());
+
   // ── Reset counters so fill-bullets can use array index directly ──
   expIdx = 0; eduIdx = 0; projIdx = 0; certIdx = 0;
 
@@ -3335,27 +3338,23 @@ async function autoFillFromResume() {
     setField('b-portfolio', p.portfolio);
     setField('b-website',   p.website);
 
-    // Summary
-    // Populate summary as bullet rows
-    if (d.summary) {
-      const rawSum = d.summary.trim();
-      // Split on bullet characters or sentence boundaries
-      let bullets = rawSum.split(/[•\n]+/).map(l => l.trim()).filter(l => l.length > 10);
-      // If only 1 item (unsplit paragraph), try splitting on '. '
-      if (bullets.length <= 1) {
-        bullets = rawSum.split(/\.\s+(?=[A-Z])/).map(l => l.replace(/\.$/,'').trim()).filter(l => l.length > 10);
+    // Summary — parser now returns array of bullet strings directly
+    const cont = document.getElementById('summary-bullets-container');
+    if (cont) {
+      cont.innerHTML = '';
+      let bullets = [];
+      if (Array.isArray(d.summary)) {
+        // New parser: already an array of bullet strings
+        bullets = d.summary.filter(b => b && b.trim().length > 5);
+      } else if (d.summary && typeof d.summary === 'string') {
+        // Legacy/fallback: split string on newlines or bullet chars
+        bullets = d.summary.split(/[•\n]+/).map(l => l.trim()).filter(l => l.length > 10);
+        if (bullets.length <= 1) {
+          bullets = d.summary.split(/\.\s+(?=[A-Z])/).map(l => l.replace(/\.$/,'').trim()).filter(l => l.length > 10);
+        }
       }
-      // Cap at 5 bullets
-      bullets = bullets.slice(0, 5);
-      const cont = document.getElementById('summary-bullets-container');
-      if (cont) {
-        cont.innerHTML = '';
-        bullets.forEach(b => addSummaryBullet(b));
-        if (bullets.length === 0) addSummaryBullet(); // at least one empty row
-      }
-    } else {
-      const cont = document.getElementById('summary-bullets-container');
-      if (cont && cont.children.length === 0) addSummaryBullet();
+      bullets.slice(0, 6).forEach(b => addSummaryBullet(b));
+      if (!bullets.length) addSummaryBullet();
     }
 
     // Skills
@@ -3519,6 +3518,7 @@ function initBuilder() {
   if (saved && saved.rb && (saved.rb.personal?.name || saved.rb.experience?.length)) {
     const minAgo = Math.round((Date.now() - saved.ts) / 60000);
     const banner = document.createElement('div');
+    banner.setAttribute('data-restore-banner', '1');
     banner.style.cssText = 'background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.25);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:.8rem;';
     banner.innerHTML = `<span>💾 Draft saved ${minAgo < 2 ? 'just now' : minAgo + ' min ago'} — <strong>${escHtml(saved.rb.personal?.name || 'resume')}</strong></span>
       <div style="display:flex;gap:8px;">
