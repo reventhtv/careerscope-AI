@@ -159,11 +159,44 @@ def _extract_json(raw: str) -> dict | list:
 # ── PDF helpers ──────────────────────────────────────────────
 
 def extract_text_from_pdf_bytes(data: bytes) -> str:
+    """
+    Extract text from PDF bytes. Handles single-column and two-column layouts.
+    For two-column PDFs (e.g. enhancecv, modern resume templates), the left sidebar
+    typically contains contact/skills and the right main body has the actual content.
+    We detect and merge columns in reading order to avoid jumbled output.
+    """
     text = ""
     try:
         with pdfplumber.open(io.BytesIO(data)) as pdf:
             for page in pdf.pages:
-                text += page.extract_text() or ""
+                # Try smart column detection: check if the page has a clear left sidebar
+                # by looking for text density in the left 30% vs right 70%
+                page_text = page.extract_text() or ""
+                width = page.width
+
+                # Detect two-column: attempt left/right crop and see if right column
+                # alone is substantially larger and more structured
+                try:
+                    left_crop  = page.crop((0,          0, width * 0.30, page.height))
+                    right_crop = page.crop((width * 0.30, 0, width,       page.height))
+                    left_text  = left_crop.extract_text()  or ""
+                    right_text = right_crop.extract_text() or ""
+
+                    # Heuristic: two-column if right column has 3x+ chars of left
+                    # AND right column contains experience/education section headers
+                    has_sections = any(s in right_text.upper()
+                                       for s in ["EXPERIENCE", "EDUCATION", "SUMMARY"])
+                    is_two_col = (len(right_text) > len(left_text) * 2.5) and has_sections
+
+                    if is_two_col:
+                        # Merge: right column main body first (has the important content),
+                        # then append left column (contact/skills)
+                        text += right_text + "\n" + left_text
+                    else:
+                        text += page_text
+                except Exception:
+                    text += page_text
+
     except Exception as exc:
         raise ValueError(f"Could not parse PDF: {exc}") from exc
     return text.strip()

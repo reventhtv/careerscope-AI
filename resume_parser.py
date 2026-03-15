@@ -49,6 +49,16 @@ def parse_resume(raw_text: str) -> dict:
     text = re.sub(r'\bSo\s*Ware\b',  'Software', text, flags=re.IGNORECASE)
     text = re.sub(r'\bAus\b(?=\s+\d{4})', 'Aug', text)   # "Aus 2022" → "Aug 2022"
 
+    # ── 1b. Fix bullet-title concatenation ───────────────────────────────
+    # Some PDF layouts concatenate a bullet continuation line directly with the
+    # next job title, e.g: "test teams.Embedded Software Engineer / Scrum Master"
+    # Detect: text ending in ".[Title Case Job Title]" and split onto a new line.
+    title_split_re = re.compile(
+        r'([a-z,])\.((?:[A-Z][a-zA-Z]+ ){1,5}'
+        r'(?:Engineer|Manager|Developer|Master|Consultant|Analyst|Architect|Director|Lead|Specialist)\b)'
+    )
+    text = title_split_re.sub(r'\1.\n\2', text)
+
     lines = [l.rstrip() for l in text.split('\n')]
 
     # ── 2. Regex constants ───────────────────────────────────────────
@@ -294,10 +304,27 @@ def parse_resume(raw_text: str) -> dict:
         yr    = re.search(r'\b(20\d{2}|19\d{2})\b', ln)
         is_deg = any(k in ln for k in DEGREE_KW)
 
+        # Check for "Institution · YYYY–YYYY" or "Institution · YYYY" inline format
+        inline_date_m = re.search(r'\s*[·|]\s*(\d{4})\s*[–\-]?\s*(\d{4})?\s*$', ln)
+        if inline_date_m and not is_deg:
+            yr2 = inline_date_m.group(2) or inline_date_m.group(1)
+            clean_inst = ln[:inline_date_m.start()].strip()
+            # If previous edu entry has no institution yet, retroactively assign
+            if edu_entries and not edu_entries[-1].get('institution'):
+                edu_entries[-1]['institution'] = clean_inst
+                edu_entries[-1]['year'] = yr2
+                if not edu_entries[-1].get('end'):
+                    edu_entries[-1]['end'] = yr2
+            else:
+                # Otherwise set for next entry
+                cur_inst = clean_inst
+                cur_yr   = yr2
+            continue
+
         if is_deg:
             deg_text, yr_val = ln, cur_yr
             gpa_inline = ''
-            # Extract inline GPA: "M.Sc – Telecom Systems 2016 · GPA 9/10"
+            # Extract inline GPA
             gpa_m = re.search(r'\s*[·,]?\s*GPA\s*:?\s*([\d./]+)', ln, re.I)
             if gpa_m:
                 gpa_inline = gpa_m.group(1)
@@ -327,16 +354,11 @@ def parse_resume(raw_text: str) -> dict:
             if g and edu_entries:
                 edu_entries[-1]['gpa'] = g.group(1)
         else:
-            # Check if this looks like a main institution name (next entry's institution)
-            # vs a sub-unit line (department, campus of prev entry)
             ln_lower = ln.lower()
             is_main_inst = (
                 any(kw in ln_lower for kw in ['university', 'hogskola', 'teknisk'])
                 and not any(sub in ln_lower for sub in ['jntu college', 'college of engineering'])
             )
-            # Attach as sub_institution if:
-            # - there's a previous entry, this isn't a main institution name,
-            #   no year, and the prev entry has no sub_institution yet
             if (edu_entries
                     and not is_main_inst
                     and not yr
@@ -344,8 +366,8 @@ def parse_resume(raw_text: str) -> dict:
                     and not edu_entries[-1].get('sub_institution')):
                 edu_entries[-1]['sub_institution'] = ln
             else:
-                cur_inst = ln    # institution line
-                cur_yr   = ''    # reset year when we get new institution
+                cur_inst = ln
+                cur_yr   = ''
 
     result['education'] = edu_entries
 
@@ -463,7 +485,10 @@ def parse_resume(raw_text: str) -> dict:
         if yr and not edu.get('end'):
             edu['end']   = yr          # graduation year goes to end
         if 'start' not in edu:
-            edu['start'] = ''          # ensure field exists
+            edu['start'] = ''
+        # Deduplicate: if start == end (e.g. "2016–2016"), keep only end
+        if edu.get('start') and edu.get('end') and edu['start'] == edu['end']:
+            edu['start'] = ''
 
     # ── 10. Post-process: Experience bullets — no truncation ─────────────
     # Do NOT cap bullets here. User controls page density via the Spacing
