@@ -399,7 +399,6 @@
     @keyframes slideUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
     .hidden { display: none !important; }
 
-
     /* ── AUTOFILL BANNER ── */
     .autofill-banner {
       display: none; align-items: center; gap: 14px;
@@ -557,8 +556,7 @@
     .rb-undo-bar { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:#1e293b; border:1px solid var(--border); border-radius:var(--radius); padding:10px 20px; display:flex; gap:14px; align-items:center; font-size:.8rem; color:var(--text); z-index:9999; box-shadow:0 4px 20px rgba(0,0,0,.4); }
     .rb-undo-bar button { background:var(--accent); border:none; border-radius:6px; padding:5px 14px; color:white; cursor:pointer; font-size:.76rem; }
 
-
-        /* ── PRINT (PDF EXPORT) ── */
+    /* ── PRINT (PDF EXPORT) ── */
     @media print {
       body { background: white !important; color: black !important; overflow: visible !important; }
       .sidebar, .nav-btn, .btn, .upload-new-btn, .bmc-btn, .share-section, .bullet-actions, #screen-upload, #screen-loading { display: none !important; }
@@ -615,7 +613,7 @@
     <div class="loader-steps">
       <div class="loader-step" id="step-1">Extracting resume text</div>
       <div class="loader-step" id="step-2">Computing ATS score</div>
-      <div class="loader-step" id="step-3">Detecting domain & experience</div>
+      <div class="loader-step" id="step-3">Detecting domain &amp; experience</div>
       <div class="loader-step" id="step-4">Preparing dashboard</div>
     </div>
   </div>
@@ -824,21 +822,39 @@
           <div class="panel-header">Resume <em>Builder</em></div>
           <p class="desc">Choose a template. We'll fill it from your uploaded resume — then you edit, tailor to any job, and export.</p>
 
+          <!-- CHANGE 3: TPM Pro replaces Executive; 4 cards total -->
           <div class="rb-tpl-grid">
-            <div class="rb-tpl-card" data-tpl="modern" onclick="rbSelectTemplate('modern')">
-              <div class="rb-tpl-preview rb-prev-modern">
-                <div class="rp-sidebar-strip"></div>
-                <div class="rp-main-strip">
-                  <div class="rp-line w80 h5 accent mb6"></div>
-                  <div class="rp-line w60 h3 mb3"></div><div class="rp-line w100 h2 mb2"></div><div class="rp-line w90 h2 mb2"></div><div class="rp-line w70 h2 mb8"></div>
-                  <div class="rp-line w50 h3 accent mb4"></div>
-                  <div class="rp-line w100 h2 mb2"></div><div class="rp-line w90 h2 mb2"></div><div class="rp-line w80 h2 mb2"></div><div class="rp-line w70 h2 mb8"></div>
-                  <div class="rp-line w50 h3 accent mb4"></div>
-                  <div class="rp-line w100 h2 mb2"></div><div class="rp-line w80 h2 mb2"></div><div class="rp-line w60 h2"></div>
+
+            <div class="rb-tpl-card selected" data-tpl="tpm" onclick="rbSelectTemplate('tpm')">
+              <div class="rb-tpl-preview" style="background:#f8f8f6;padding:8px 7px;">
+                <div style="text-align:center;margin-bottom:6px;">
+                  <div style="height:7px;background:#0a0a0a;width:65%;margin:0 auto 3px;border-radius:1px;"></div>
+                  <div style="height:3.5px;background:#333;width:45%;margin:0 auto 2px;border-radius:1px;"></div>
+                  <div style="height:2px;background:#999;width:78%;margin:0 auto 5px;border-radius:1px;"></div>
                 </div>
+                <div style="height:3px;background:#0a0a0a;width:48%;margin-bottom:1px;border-radius:1px;"></div>
+                <div style="height:0.5px;background:#000;width:100%;margin-bottom:4px;"></div>
+                <div style="height:2px;background:#ccc;width:92%;margin-bottom:3px;margin-left:3px;"></div>
+                <div style="height:2px;background:#ccc;width:85%;margin-bottom:6px;margin-left:3px;"></div>
+                <div style="height:3px;background:#0a0a0a;width:60%;margin-bottom:1px;border-radius:1px;"></div>
+                <div style="height:0.5px;background:#000;width:100%;margin-bottom:4px;"></div>
+                <div style="display:flex;height:7px;margin-bottom:2px;">
+                  <div style="width:3px;background:#1F3A93;flex-shrink:0;"></div>
+                  <div style="flex:1;background:#EBF4FF;border-radius:0 1px 1px 0;"></div>
+                </div>
+                <div style="height:5px;background:#EAEAEA;margin-bottom:3px;border-radius:1px;"></div>
+                <div style="height:2px;background:#bbb;width:94%;margin-bottom:2px;margin-left:4px;border-radius:1px;"></div>
+                <div style="height:2px;background:#bbb;width:88%;margin-bottom:2px;margin-left:4px;border-radius:1px;"></div>
+                <div style="height:2px;background:#bbb;width:91%;margin-bottom:5px;margin-left:4px;border-radius:1px;"></div>
+                <div style="display:flex;height:7px;margin-bottom:2px;">
+                  <div style="width:3px;background:#1F3A93;flex-shrink:0;"></div>
+                  <div style="flex:1;background:#EBF4FF;border-radius:0 1px 1px 0;"></div>
+                </div>
+                <div style="height:5px;background:#EAEAEA;margin-bottom:3px;border-radius:1px;"></div>
+                <div style="height:2px;background:#bbb;width:90%;margin-bottom:2px;margin-left:4px;border-radius:1px;"></div>
               </div>
-              <div class="rb-tpl-name">Modern</div>
-              <div class="rb-tpl-desc">Two-column · Dark sidebar</div>
+              <div class="rb-tpl-name">TPM Pro</div>
+              <div class="rb-tpl-desc">Serif · ATS-safe · Professional</div>
             </div>
 
             <div class="rb-tpl-card" data-tpl="classic" onclick="rbSelectTemplate('classic')">
@@ -860,20 +876,20 @@
               <div class="rb-tpl-desc">Single column · ATS-safe</div>
             </div>
 
-            <div class="rb-tpl-card" data-tpl="executive" onclick="rbSelectTemplate('executive')">
-              <div class="rb-tpl-preview rb-prev-executive">
-                <div style="text-align:center;padding-bottom:6px;border-bottom:2px solid #1a1a2e;margin-bottom:6px;">
-                  <div class="rp-line w65 h5 dark mb3 mx-auto"></div>
-                  <div class="rp-line w45 h2 mb2 mx-auto"></div>
-                  <div class="rp-line w80 h2 mx-auto"></div>
+            <div class="rb-tpl-card" data-tpl="modern" onclick="rbSelectTemplate('modern')">
+              <div class="rb-tpl-preview rb-prev-modern">
+                <div class="rp-sidebar-strip"></div>
+                <div class="rp-main-strip">
+                  <div class="rp-line w80 h5 accent mb6"></div>
+                  <div class="rp-line w60 h3 mb3"></div><div class="rp-line w100 h2 mb2"></div><div class="rp-line w90 h2 mb2"></div><div class="rp-line w70 h2 mb8"></div>
+                  <div class="rp-line w50 h3 accent mb4"></div>
+                  <div class="rp-line w100 h2 mb2"></div><div class="rp-line w90 h2 mb2"></div><div class="rp-line w80 h2 mb2"></div><div class="rp-line w70 h2 mb8"></div>
+                  <div class="rp-line w50 h3 accent mb4"></div>
+                  <div class="rp-line w100 h2 mb2"></div><div class="rp-line w80 h2 mb2"></div><div class="rp-line w60 h2"></div>
                 </div>
-                <div class="rp-line w40 h3 dark bold mb2"></div>
-                <div class="rp-line w100 h2 mb2"></div><div class="rp-line w90 h2 mb2"></div><div class="rp-line w80 h2 mb6"></div>
-                <div class="rp-line w40 h3 dark bold mb2"></div>
-                <div class="rp-line w100 h2 mb2"></div><div class="rp-line w80 h2 mb2"></div><div class="rp-line w70 h2"></div>
               </div>
-              <div class="rb-tpl-name">Executive</div>
-              <div class="rb-tpl-desc">Serif · Senior roles</div>
+              <div class="rb-tpl-name">Modern</div>
+              <div class="rb-tpl-desc">Two-column · Dark sidebar</div>
             </div>
 
             <div class="rb-tpl-card" data-tpl="minimal" onclick="rbSelectTemplate('minimal')">
@@ -889,6 +905,7 @@
               <div class="rb-tpl-name">Minimal</div>
               <div class="rb-tpl-desc">Clean · Tech-forward</div>
             </div>
+
           </div>
 
           <!-- Accent + Spacing inline controls -->
@@ -1171,7 +1188,6 @@ async function handleUpload(file) {
   try {
     const form = new FormData();
     form.append('file', file);
-    // Send previous session id so backend can clean it up
     if (sessionId) form.append('prev_session_id', sessionId);
     const r = await fetch('/api/upload', { method: 'POST', body: form });
     const d = await r.json();
@@ -1215,10 +1231,8 @@ function renderOverview(data, filename) {
   document.getElementById('sidebar-filename').textContent = filename || 'resume.pdf';
   document.getElementById('sidebar-ats').textContent = `ATS: ${data.ats_score}%`;
 
-  // Share text
   document.getElementById('share-score-text').textContent = `ATS Score: ${data.ats_score}% — ${data.experience_level} ${data.domain}`;
 
-  // ATS Ring
   setTimeout(() => {
     const C = 314.16;
     const off = C * (1 - data.ats_score / 100);
@@ -1229,7 +1243,6 @@ function renderOverview(data, filename) {
     animNum('ats-value', 0, s, 1400);
   }, 200);
 
-  // ATS Breakdown
   if (data.ats_breakdown) {
     const bd = data.ats_breakdown;
     const rows = [
@@ -1252,19 +1265,16 @@ function renderOverview(data, filename) {
     }, 300);
   }
 
-  // Level badge
   const lb = document.getElementById('level-badge');
   lb.textContent = data.experience_level; lb.className = 'level-badge';
   if      (data.experience_level === 'Entry-level') lb.classList.add('entry');
   else if (data.experience_level === 'Mid-level')   lb.classList.add('mid');
   else                                               lb.classList.add('exp');
 
-  // Domain
   document.getElementById('domain-name').textContent  = data.domain;
   document.getElementById('conf-text').textContent    = `${data.domain_confidence}% confidence`;
   setTimeout(() => document.getElementById('conf-fill').style.width = data.domain_confidence + '%', 400);
 
-  // Mini contact
   const mc = document.getElementById('mini-contact');
   mc.innerHTML = '';
   if (data.email) mc.innerHTML += `<div style="font-family:var(--fm);font-size:.72rem;color:var(--text-sub);margin-bottom:5px;">✉ ${escHtml(data.email)}</div>`;
@@ -1361,7 +1371,6 @@ async function getImprovements() {
     if (!r.ok) throw new Error(d.detail || 'Failed');
 
     if (d.parse_error) {
-      // Fallback to raw output
       document.getElementById('improve-output').innerHTML = mdToHtml(d.raw);
       document.getElementById('improve-output').classList.remove('hidden');
       btn.textContent = '✓ Done';
@@ -1378,7 +1387,6 @@ async function getImprovements() {
 }
 
 function renderStructured(data) {
-  // Improvements
   if (data.improvements) {
     document.getElementById('improvements-list').innerHTML = data.improvements.map(item => `
       <div class="improvement-item">
@@ -1390,7 +1398,6 @@ function renderStructured(data) {
       </div>`).join('');
   }
 
-  // Skill Gaps
   if (data.skill_gaps) {
     document.getElementById('skill-gap-tbody').innerHTML = data.skill_gaps.map(sg => {
       const gapClass = sg.gap === 'critical' ? 'gap-critical' : sg.gap === 'moderate' ? 'gap-moderate' : 'gap-none';
@@ -1409,7 +1416,6 @@ function renderStructured(data) {
     }).join('');
   }
 
-  // Bullet Rewrites
   if (data.bullet_rewrites) {
     acceptedBullets = new Array(data.bullet_rewrites.length).fill(null);
     document.getElementById('bullet-cards').innerHTML = data.bullet_rewrites.map((br, i) => `
@@ -1436,7 +1442,6 @@ function renderStructured(data) {
       </div>`).join('');
   }
 
-  // Candidacy
   if (data.candidacy) {
     const ratingClass = data.candidacy.rating === 'Strong' ? 'rating-strong' : data.candidacy.rating === 'Moderate' ? 'rating-moderate' : 'rating-weak';
     document.getElementById('candidacy-card').innerHTML = `
@@ -1537,20 +1542,17 @@ function shareTwitter() {
 }
 
 // ─────────────────────────────────────
-//  EXPORT PDF
+//  EXPORT PDF (overview/analysis)
 // ─────────────────────────────────────
 function exportPDF() {
-  // Show all panels temporarily for print
   document.querySelectorAll('.panel').forEach(p => {
     p.style.display = 'block';
   });
   window.print();
-  // Restore
   setTimeout(() => {
     document.querySelectorAll('.panel').forEach(p => {
       p.style.display = '';
     });
-    // Re-apply active state
     document.querySelectorAll('.panel').forEach(p => {
       p.classList.remove('active');
     });
@@ -1729,7 +1731,6 @@ function init() {
   );
 
   document.getElementById('upload-new-btn').addEventListener('click', async () => {
-    // Delete session on server before resetting
     if (sessionId) {
       try { await fetch(`/api/session/${sessionId}`, { method: 'DELETE' }); } catch {}
     }
@@ -1749,14 +1750,16 @@ function init() {
 
 
 // ═══════════════════════════════════════════════════════
-//  RESUME BUILDER v2  — clean rewrite
+//  RESUME BUILDER v2  — with TPM Pro template
 // ═══════════════════════════════════════════════════════
 
-// ── STATE ────────────────────────────────────────────────
+// ── STATE ─────────────────────────────────────────────────
 const RB_LS_KEY = 'cs_rb_v2';
+
+// CHANGE 1: default template = 'tpm', accent = '#1F3A93'
 let rbState = {
-  template: 'classic',
-  accent:   '#2b4da8',
+  template: 'tpm',
+  accent:   '#1F3A93',
   spacing:  'normal',
   personal: {},
   summary:  [],
@@ -1772,22 +1775,22 @@ let rbAtsTimer = null;
 let rbUndoSnap = null;
 let rbInited = false;
 
+// CHANGE 2: TPM Blue added as first/default accent swatch
 const RB_ACCENTS = [
-  { label:'Navy',   v:'#2b4da8' },
-  { label:'Teal',   v:'#0d9488' },
-  { label:'Violet', v:'#7c3aed' },
-  { label:'Slate',  v:'#334155' },
-  { label:'Rose',   v:'#e11d48' },
-  { label:'Forest', v:'#166534' },
+  { label:'TPM Blue', v:'#1F3A93' },
+  { label:'Navy',     v:'#2b4da8' },
+  { label:'Teal',     v:'#0d9488' },
+  { label:'Violet',   v:'#7c3aed' },
+  { label:'Slate',    v:'#334155' },
+  { label:'Rose',     v:'#e11d48' },
 ];
 const RB_SPACING = { compact:0.85, normal:1, spacious:1.15 };
 
-// ── INIT ─────────────────────────────────────────────────
+// ── INIT ──────────────────────────────────────────────────
 function initBuilder() {
   if (rbInited) return;
   rbInited = true;
 
-  // Render accent picker
   const picker = document.getElementById('rb-accent-picker');
   if (picker) {
     picker.innerHTML = RB_ACCENTS.map(a =>
@@ -1796,7 +1799,7 @@ function initBuilder() {
   }
 }
 
-// ── GALLERY ──────────────────────────────────────────────
+// ── GALLERY ───────────────────────────────────────────────
 function rbSelectTemplate(tpl) {
   rbState.template = tpl;
   document.querySelectorAll('.rb-tpl-card').forEach(c =>
@@ -1809,15 +1812,12 @@ function rbShowEditor() {
   document.getElementById('rb-gallery').style.display = 'none';
   document.getElementById('rb-editor').style.display  = 'block';
 
-  // Seed empty entries if none exist
   if (document.getElementById('rb-sum-list').children.length === 0) rbAddSumBullet('');
   if (document.getElementById('rb-exp-list').children.length  === 0) rbAddExp();
   if (document.getElementById('rb-edu-list').children.length  === 0) rbAddEdu();
 
-  // Auto-open Personal section
   rbOpenSec('personal');
 
-  // Trigger autofill if session exists and not done
   if (sessionId && !rbAutoFillDone) rbAutoFill();
   else rbSync();
 }
@@ -1827,7 +1827,7 @@ function rbShowGallery() {
   document.getElementById('rb-gallery').style.display = 'block';
 }
 
-// ── ACCENT / SPACING ─────────────────────────────────────
+// ── ACCENT / SPACING ──────────────────────────────────────
 function rbSetAccent(v, el) {
   rbState.accent = v;
   document.querySelectorAll('.rb-swatch').forEach(s => s.classList.remove('selected'));
@@ -1867,7 +1867,6 @@ function rbOpenSec(id) {
 
 // ── SYNC: read DOM → rbState → render ────────────────────
 function rbSync() {
-  // Personal
   rbState.personal = {
     name:      rbVal('rb-name'),
     title:     rbVal('rb-title'),
@@ -1879,20 +1878,17 @@ function rbSync() {
     website:   rbVal('rb-website'),
   };
 
-  // Summary
   rbState.summary = [];
   document.querySelectorAll('#rb-sum-list .rb-sum-input').forEach(inp => {
     const v = inp.value.trim(); if (v) rbState.summary.push(v);
   });
 
-  // Skills
   rbState.skills = {
     tech:  rbVal('rb-skills-tech'),
     soft:  rbVal('rb-skills-soft'),
     tools: rbVal('rb-skills-tools'),
   };
 
-  // Experience
   rbState.experience = [];
   document.querySelectorAll('.rb-exp-entry').forEach(card => {
     const i = card.dataset.idx;
@@ -1911,7 +1907,6 @@ function rbSync() {
     });
   });
 
-  // Education
   rbState.education = [];
   document.querySelectorAll('.rb-edu-entry').forEach(card => {
     const i = card.dataset.idx;
@@ -1926,7 +1921,6 @@ function rbSync() {
     });
   });
 
-  // Projects
   rbState.projects = [];
   document.querySelectorAll('.rb-proj-entry').forEach(card => {
     const i = card.dataset.idx;
@@ -1942,7 +1936,6 @@ function rbSync() {
     });
   });
 
-  // Certifications
   rbState.certifications = [];
   document.querySelectorAll('.rb-cert-entry').forEach(card => {
     const i = card.dataset.idx;
@@ -1956,7 +1949,6 @@ function rbSync() {
   rbUpdateSectionStatus();
   rbRenderPreview();
 
-  // Debounced ATS
   clearTimeout(rbAtsTimer);
   rbAtsTimer = setTimeout(rbUpdateATS, 600);
 }
@@ -1975,7 +1967,7 @@ function rbUpdateSectionStatus() {
   setStatus('skills',         !!(p.skills.tech));
 }
 
-// ── LIVE ATS ─────────────────────────────────────────────
+// ── LIVE ATS ──────────────────────────────────────────────
 function rbUpdateATS() {
   const text = [
     rbState.personal.name, rbState.personal.title, rbState.personal.email,
@@ -2005,7 +1997,6 @@ function rbUpdateATS() {
   valEl.textContent     = score+'%';
   valEl.style.color     = score>=80?'var(--green)':score>=60?'var(--yellow)':'var(--orange)';
 
-  // Autosave
   try { localStorage.setItem(RB_LS_KEY, JSON.stringify({s: rbState, ts: Date.now()})); } catch(e) {}
 }
 
@@ -2077,7 +2068,6 @@ function rbAddExp(data) {
       </div>
     </div>`;
   list.appendChild(card);
-  // Add bullets
   const bulls = (d.bullets||[]).filter(b=>b.trim());
   if (bulls.length) bulls.forEach(b => rbAddBullet(`rb-exp-bullets-${idx}`, b));
   else rbAddBullet(`rb-exp-bullets-${idx}`, '');
@@ -2300,14 +2290,12 @@ async function rbAutoFill() {
     const d = await r.json();
     if (d.parse_error) throw new Error('Parser returned error');
 
-    // ── Personal ────────────────────────────────────────────
     const p = d.personal || {};
     ['name','title','email','phone','location','linkedin','portfolio','website'].forEach(k => {
       const el = document.getElementById(`rb-${k}`);
       if (el && p[k]) el.value = p[k];
     });
 
-    // ── Summary ─────────────────────────────────────────────
     const sumList = document.getElementById('rb-sum-list');
     sumList.innerHTML = '';
     const sumBullets = Array.isArray(d.summary) ? d.summary
@@ -2315,14 +2303,12 @@ async function rbAutoFill() {
     sumBullets.slice(0,6).forEach(b => rbAddSumBullet(b));
     if (!sumBullets.length) rbAddSumBullet('');
 
-    // ── Skills ──────────────────────────────────────────────
     if (d.skills) {
       if (d.skills.tech)  { const el=document.getElementById('rb-skills-tech');  if(el) el.value=d.skills.tech; }
       if (d.skills.soft)  { const el=document.getElementById('rb-skills-soft');  if(el) el.value=d.skills.soft; }
       if (d.skills.tools) { const el=document.getElementById('rb-skills-tools'); if(el) el.value=d.skills.tools; }
     }
 
-    // ── Experience — clear then populate ALL entries ─────────
     document.getElementById('rb-exp-list').innerHTML = '';
     rbExpIdx = 0;
     if (d.experience?.length) {
@@ -2331,7 +2317,6 @@ async function rbAutoFill() {
       rbAddExp();
     }
 
-    // ── Education — clear then populate ALL entries ──────────
     document.getElementById('rb-edu-list').innerHTML = '';
     rbEduIdx = 0;
     if (d.education?.length) {
@@ -2340,14 +2325,12 @@ async function rbAutoFill() {
       rbAddEdu();
     }
 
-    // ── Projects ─────────────────────────────────────────────
     if (d.projects?.length) {
       document.getElementById('rb-proj-list').innerHTML = '';
       rbProjIdx = 0;
       d.projects.forEach(proj => rbAddProj(proj));
     }
 
-    // ── Certifications ────────────────────────────────────────
     if (d.certifications?.length) {
       document.getElementById('rb-cert-list').innerHTML = '';
       rbCertIdx = 0;
@@ -2357,11 +2340,10 @@ async function rbAutoFill() {
     rbSync();
     rbOpenSec('personal');
 
-    // ── Fill-bullets: top up entries with < 5 bullets ────────
     if (status) status.textContent = '⟳ Completing bullet points…';
     if (d.experience?.length) {
       const fills = d.experience.map(async (exp, i) => {
-        if ((exp.bullets||[]).length >= 5) return; // already has enough
+        if ((exp.bullets||[]).length >= 5) return;
         try {
           const r2 = await fetch('/api/fill-bullets', {
             method:'POST', headers:{'Content-Type':'application/json'},
@@ -2376,7 +2358,7 @@ async function rbAutoFill() {
               d2.bullets.forEach(b => rbAddBullet(`rb-exp-bullets-${i}`, b));
             }
           }
-        } catch(e) { /* silent — user still has original bullets */ }
+        } catch(e) {}
       });
       await Promise.all(fills);
       rbSync();
@@ -2392,7 +2374,7 @@ async function rbAutoFill() {
   }
 }
 
-// ── AI FEATURES ──────────────────────────────────────────
+// ── AI FEATURES ───────────────────────────────────────────
 function rbSaveUndo() {
   rbUndoSnap = JSON.parse(JSON.stringify(rbState));
 }
@@ -2418,16 +2400,13 @@ function rbUndo() {
 }
 
 function rbRestoreState(s) {
-  // Personal
   ['name','title','email','phone','location','linkedin','portfolio','website'].forEach(k => {
     const el = document.getElementById(`rb-${k}`);
     if (el) el.value = s.personal[k] || '';
   });
-  // Summary
   const sumList = document.getElementById('rb-sum-list');
   sumList.innerHTML = '';
   (s.summary||[]).forEach(b => rbAddSumBullet(b));
-  // Skills
   const st = document.getElementById('rb-skills-tech'); if(st) st.value = s.skills?.tech||'';
   const ss = document.getElementById('rb-skills-soft'); if(ss) ss.value = s.skills?.soft||'';
   const so = document.getElementById('rb-skills-tools');if(so) so.value = s.skills?.tools||'';
@@ -2624,18 +2603,161 @@ function rbInsertBullet(listId, el) {
   showToast('Bullet added ✓');
 }
 
-// ── LIVE PREVIEW ─────────────────────────────────────────
+// ── LIVE PREVIEW ──────────────────────────────────────────
+// CHANGE 4: rbRenderPreview routes to rbRenderTPM for 'tpm' template
 function rbRenderPreview() {
   const container = document.getElementById('rb-preview-content');
   if (!container) return;
   const tpl = rbState.template;
-  if      (tpl === 'modern')    container.innerHTML = rbRenderModern();
-  else if (tpl === 'executive') container.innerHTML = rbRenderExecutive();
-  else if (tpl === 'minimal')   container.innerHTML = rbRenderMinimal();
-  else                          container.innerHTML = rbRenderClassic();
+  if      (tpl === 'tpm')     container.innerHTML = rbRenderTPM();
+  else if (tpl === 'modern')  container.innerHTML = rbRenderModern();
+  else if (tpl === 'minimal') container.innerHTML = rbRenderMinimal();
+  else                        container.innerHTML = rbRenderClassic();
 }
 
 function rbE(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// CHANGE 5: New rbRenderTPM() function — pixel-faithful to Reventh_Resume_TPM.pdf
+// Name: Georgia Bold 22pt · Title: Georgia Bold 12.5pt · Body: Arial 10.5pt
+// Section header: Georgia Bold 12pt + 0.75px black rule
+// Job-title row: #EBF4FF bg + 3px #1F3A93 left accent bar
+// Company row: #EAEAEA bg, bold company left, dates right
+// Domain tag: Georgia Italic 10pt
+function rbRenderTPM() {
+  const p  = rbState.personal;
+  const sk = rbState.skills;
+  const sc = RB_SPACING[rbState.spacing] || 1;
+  const ac = rbState.accent || '#1F3A93';
+  const E  = rbE;
+
+  const contactItems = [
+    p.location  && '<span>📍 ' + E(p.location)  + '</span>',
+    p.email     && '<span>✉ '  + E(p.email)     + '</span>',
+    p.phone     && '<span>✆ '  + E(p.phone)     + '</span>',
+    p.linkedin  && '<span>🔗 ' + E(p.linkedin)  + '</span>',
+    p.portfolio && '<span>🔗 ' + E(p.portfolio) + '</span>',
+  ].filter(Boolean).join('<span style="margin:0 8px;color:#888;">||</span>');
+
+  const secHdr = (label) =>
+    '<div style="margin-top:' + (14*sc) + 'px;margin-bottom:' + (5*sc) + 'px;">' +
+      '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:' + (12*sc) + 'px;font-weight:700;letter-spacing:0.5px;color:#111;">' + label + '</div>' +
+      '<div style="height:0.75px;background:#111;margin-top:2px;"></div>' +
+    '</div>';
+
+  const jobTitleRow = (title) =>
+    '<div style="display:flex;align-items:stretch;margin-top:' + (8*sc) + 'px;">' +
+      '<div style="width:3px;background:' + ac + ';flex-shrink:0;"></div>' +
+      '<div style="flex:1;background:#EBF4FF;padding:' + (3*sc) + 'px ' + (7*sc) + 'px;font-family:Georgia,\'Times New Roman\',serif;font-size:' + (10.5*sc) + 'px;font-weight:700;color:#0a0a0a;">' +
+        E(title) +
+      '</div>' +
+    '</div>';
+
+  const companyRow = (company, location, start, end) => {
+    const dates = [start, end].filter(Boolean).join(' – ');
+    const co    = [company, location].filter(Boolean).join(', ');
+    return '<div style="display:flex;justify-content:space-between;align-items:center;background:#EAEAEA;padding:' + (2.5*sc) + 'px ' + (7*sc) + 'px;margin-bottom:' + (4*sc) + 'px;">' +
+      '<span style="font-family:Georgia,\'Times New Roman\',serif;font-size:' + (10.5*sc) + 'px;font-weight:700;color:#111;">' + E(co) + '</span>' +
+      '<span style="font-family:Arial,sans-serif;font-size:' + (10*sc) + 'px;color:#333;">' + E(dates) + '</span>' +
+    '</div>';
+  };
+
+  const domainRow = (domain) => domain
+    ? '<div style="font-family:Georgia,\'Times New Roman\',serif;font-style:italic;font-size:' + (10*sc) + 'px;color:#444;margin-bottom:' + (4*sc) + 'px;padding-left:' + (6*sc) + 'px;">' + E(domain) + '</div>'
+    : '';
+
+  const bul = (text) =>
+    '<div style="display:flex;gap:' + (5*sc) + 'px;margin-bottom:' + (3*sc) + 'px;padding-left:' + (2*sc) + 'px;">' +
+      '<span style="font-family:Arial,sans-serif;font-size:' + (10.5*sc) + 'px;flex-shrink:0;color:#111;">•</span>' +
+      '<span style="font-family:Arial,sans-serif;font-size:' + (10.5*sc) + 'px;color:#111;line-height:' + (1.5*sc) + ';">' + E(text) + '</span>' +
+    '</div>';
+
+  // Summary
+  const sumBuls = rbState.summary.filter(b => b.trim());
+  const summaryHtml = sumBuls.length ? secHdr('SUMMARY') + sumBuls.map(bul).join('') : '';
+
+  // Experience
+  const validExp = rbState.experience.filter(e => e.role);
+  const expHtml = validExp.length
+    ? secHdr('PROFESSIONAL EXPERIENCE') +
+      validExp.map(e =>
+        jobTitleRow(e.role) +
+        companyRow(e.company, e.location, e.start, e.end) +
+        domainRow(e.domain) +
+        e.bullets.filter(b => b.trim()).map(bul).join('')
+      ).join('<div style="height:' + (8*sc) + 'px;"></div>')
+    : '';
+
+  // Education
+  const validEdu = rbState.education.filter(e => e.institution);
+  const eduHtml = validEdu.length
+    ? secHdr('EDUCATION') +
+      validEdu.map(e => {
+        const yr       = e.end || e.year || '';
+        const degField = [e.degree, e.field].filter(Boolean).join(' - ');
+        const gpaStr   = e.gpa ? ' · GPA ' + E(e.gpa) : '';
+        return '<div style="margin-bottom:' + (6*sc) + 'px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:baseline;">' +
+            '<span style="font-family:Georgia,\'Times New Roman\',serif;font-size:' + (10.5*sc) + 'px;font-weight:700;color:#111;">' + E(e.institution) + '</span>' +
+            '<span style="font-family:Arial,sans-serif;font-size:' + (10*sc) + 'px;color:#333;">' + E(yr) + '</span>' +
+          '</div>' +
+          (degField ? '<div style="font-family:Georgia,\'Times New Roman\',serif;font-style:italic;font-size:' + (10*sc) + 'px;color:#333;margin-top:1px;">' + E(degField) + gpaStr + '</div>' : '') +
+        '</div>';
+      }).join('')
+    : '';
+
+  // Skills
+  const skillCats = [
+    sk.tech  && { label: 'Technical Program Management',  items: sk.tech  },
+    sk.soft  && { label: 'Product & Delivery Leadership', items: sk.soft  },
+    sk.tools && { label: 'Domains',                       items: sk.tools },
+  ].filter(Boolean);
+  const skillsHtml = skillCats.length
+    ? secHdr('SKILLS') + skillCats.map(cat => {
+        const items    = cat.items.split(',').map(s => s.trim()).filter(Boolean);
+        const itemsStr = items.join(' • ');
+        return '<div style="display:flex;gap:' + (4*sc) + 'px;margin-bottom:' + (4*sc) + 'px;padding-left:' + (2*sc) + 'px;">' +
+          '<span style="font-family:Arial,sans-serif;font-size:' + (10.5*sc) + 'px;flex-shrink:0;color:#111;">•</span>' +
+          '<span style="font-family:Arial,sans-serif;font-size:' + (10.5*sc) + 'px;color:#111;line-height:' + (1.5*sc) + ';"><strong>' + E(cat.label) + ':</strong> ' + E(itemsStr) + '</span>' +
+        '</div>';
+      }).join('')
+    : '';
+
+  // Certifications
+  const certHtml = rbState.certifications.length
+    ? secHdr('CERTIFICATIONS') +
+      rbState.certifications.map(c =>
+        '<div style="display:flex;gap:' + (4*sc) + 'px;margin-bottom:' + (3*sc) + 'px;padding-left:' + (2*sc) + 'px;">' +
+          '<span style="font-family:Arial,sans-serif;font-size:' + (10.5*sc) + 'px;flex-shrink:0;">•</span>' +
+          '<span style="font-family:Arial,sans-serif;font-size:' + (10.5*sc) + 'px;color:#111;line-height:' + (1.5*sc) + ';"><strong>' + E(c.name) + '</strong>' +
+            (c.issuer ? ' · ' + E(c.issuer) : '') +
+            (c.year   ? ' · ' + E(c.year)   : '') +
+          '</span>' +
+        '</div>'
+      ).join('')
+    : '';
+
+  // Projects
+  const validProj = rbState.projects.filter(pj => pj.name);
+  const projHtml = validProj.length
+    ? secHdr('PROJECTS') +
+      validProj.map(proj => {
+        const techStr = proj.tech ? ' <span style="font-style:italic;color:#555;font-size:' + (9.5*sc) + 'px;">[' + E(proj.tech) + ']</span>' : '';
+        return '<div style="margin-bottom:' + (8*sc) + 'px;">' +
+          '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:' + (10.5*sc) + 'px;font-weight:700;margin-bottom:' + (2*sc) + 'px;">' + E(proj.name) + techStr + '</div>' +
+          proj.bullets.filter(b => b.trim()).map(bul).join('') +
+        '</div>';
+      }).join('')
+    : '';
+
+  return '<div style="font-family:Arial,\'Helvetica Neue\',sans-serif;font-size:' + (10.5*sc) + 'px;color:#111;background:white;padding:' + (20*sc) + 'px ' + (15*sc) + 'px ' + (20*sc) + 'px ' + (15*sc) + 'px;min-height:100%;">' +
+    '<div style="text-align:center;margin-bottom:' + (10*sc) + 'px;">' +
+      '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:' + (22*sc) + 'px;font-weight:700;letter-spacing:1px;color:#0a0a0a;line-height:1.1;margin-bottom:' + (4*sc) + 'px;">' + E(p.name || 'YOUR NAME') + '</div>' +
+      (p.title ? '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:' + (12.5*sc) + 'px;font-weight:700;color:#222;margin-bottom:' + (4*sc) + 'px;">' + E(p.title) + '</div>' : '') +
+      (contactItems ? '<div style="font-family:Arial,sans-serif;font-size:' + (10*sc) + 'px;color:#333;line-height:1.6;">' + contactItems + '</div>' : '') +
+    '</div>' +
+    summaryHtml + expHtml + eduHtml + skillsHtml + projHtml + certHtml +
+  '</div>';
+}
 
 function rbRenderModern() {
   const p = rbState.personal, sk = rbState.skills, ac = rbState.accent;
@@ -2677,24 +2799,6 @@ function rbRenderClassic() {
   </div>`;
 }
 
-function rbRenderExecutive() {
-  const p = rbState.personal;
-  const sum = rbState.summary.join(' ');
-  const contacts = [p.email&&`✉ ${rbE(p.email)}`,p.phone&&`✆ ${rbE(p.phone)}`,p.location&&`📍 ${rbE(p.location)}`,p.linkedin&&`🔗 ${rbE(p.linkedin)}`].filter(Boolean);
-  return `<div style="font-family:Georgia,serif;color:#1a1a2e;padding:28px 32px;font-size:9px;">
-    <div style="text-align:center;border-bottom:2.5px solid #1a1a2e;padding-bottom:12px;margin-bottom:14px;">
-      <div style="font-size:20px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">${rbE(p.name)||'Your Name'}</div>
-      ${p.title?`<div style="font-size:9px;color:#555;letter-spacing:1px;margin-top:3px;">${rbE(p.title)}</div>`:''}
-      <div style="display:flex;justify-content:center;gap:14px;font-size:7.5px;color:#666;margin-top:6px;flex-wrap:wrap;">${contacts.join(' | ')}</div>
-    </div>
-    ${sum?`<div style="font-size:8px;font-weight:700;letter-spacing:3px;text-transform:uppercase;border-bottom:1px solid #1a1a2e;padding-bottom:3px;margin-bottom:8px;">Executive Summary</div><div style="font-size:8.5px;color:#333;line-height:1.7;margin-bottom:12px;">${rbE(sum)}</div>`:''}
-    ${rbState.experience.filter(e=>e.role).length?`<div style="font-size:8px;font-weight:700;letter-spacing:3px;text-transform:uppercase;border-bottom:1px solid #1a1a2e;padding-bottom:3px;margin-bottom:10px;">Professional Experience</div>${rbState.experience.filter(e=>e.role).map(e=>`<div style="margin-bottom:10px;"><div style="display:flex;justify-content:space-between;"><span style="font-size:9px;font-weight:700;">${rbE(e.role)}</span><span style="font-size:7.5px;color:#555;">${rbE(e.start||'')}${e.end?' – '+rbE(e.end):''}</span></div><div style="font-size:8px;color:#555;font-style:italic;margin-bottom:4px;">${rbE(e.company)}${e.location?' · '+rbE(e.location):''}</div>${e.bullets.map(b=>`<div style="font-size:8px;padding-left:10px;position:relative;line-height:1.5;margin-bottom:2px;color:#333;"><span style="position:absolute;left:2px;">▸</span>${rbE(b)}</div>`).join('')}</div>`).join('')}`:''}
-    ${rbState.skills.tech?`<div style="font-size:8px;font-weight:700;letter-spacing:3px;text-transform:uppercase;border-bottom:1px solid #1a1a2e;padding-bottom:3px;margin:10px 0 8px;">Core Competencies</div><div style="font-size:8.5px;color:#333;line-height:1.8;">${rbState.skills.tech.split(',').slice(0,14).map(s=>`<span style="display:inline-block;margin:2px 8px 2px 0;">◆ ${rbE(s.trim())}</span>`).join('')}</div>`:''}
-    ${rbState.education.filter(e=>e.institution).length?`<div style="font-size:8px;font-weight:700;letter-spacing:3px;text-transform:uppercase;border-bottom:1px solid #1a1a2e;padding-bottom:3px;margin:10px 0 8px;">Education</div>${rbState.education.filter(e=>e.institution).map(e=>{const ed=e.start&&e.end?e.start+'–'+e.end:e.end||e.start||'';return`<div style="display:flex;justify-content:space-between;font-size:8.5px;margin-bottom:4px;"><span><strong>${rbE(e.degree)}${e.field?', '+rbE(e.field):''}</strong> — ${rbE(e.institution)}</span><span style="color:#555;">${rbE(ed)}${e.gpa?' · GPA '+rbE(e.gpa):''}</span></div>`}).join('')}`:''}
-    ${rbState.certifications.length?`<div style="font-size:8px;font-weight:700;letter-spacing:3px;text-transform:uppercase;border-bottom:1px solid #1a1a2e;padding-bottom:3px;margin:10px 0 8px;">Certifications</div>${rbState.certifications.map(c=>`<div style="font-size:8.5px;margin-bottom:3px;">◆ ${rbE(c.name)}${c.issuer?' — '+rbE(c.issuer):''}${c.year?' ('+rbE(c.year)+')':''}</div>`).join('')}`:''}
-  </div>`;
-}
-
 function rbRenderMinimal() {
   const p = rbState.personal, sk = rbState.skills;
   const contacts = [p.email,p.phone,p.location,p.linkedin].filter(Boolean);
@@ -2709,7 +2813,7 @@ function rbRenderMinimal() {
   </div>`;
 }
 
-// ── PDF EXPORT ─────────────────────────────────────────────
+// CHANGE 6: rbExportPDF — full replacement with TPM-specific pt-unit A4 export
 function rbExportPDF() {
   if (sessionId) fetch(`/api/track-export/${sessionId}`, {method:'POST'}).catch(()=>{});
   rbSync();
@@ -2719,43 +2823,178 @@ function rbExportPDF() {
     showToast('Fill in your resume first', true); return;
   }
 
-  const sc = RB_SPACING[rbState.spacing] || 1;
-  const ac = rbState.accent;
+  const sc  = RB_SPACING[rbState.spacing] || 1;
+  const ac  = rbState.accent || '#1F3A93';
   const tpl = rbState.template;
+  const E   = rbE;
+  let bodyContent = '';
+  let pageCSS     = '';
 
-  let bodyStyle = '';
-  if (tpl==='modern')    bodyStyle = `font-family:Calibri,'Segoe UI',Arial,sans-serif;font-size:${8.5*sc}px;`;
-  else if (tpl==='classic')  bodyStyle = `font-family:Calibri,'Segoe UI',Arial,sans-serif;font-size:${8.8*sc}px;line-height:${1.5*sc};padding:${12*sc}mm 14mm;`;
-  else if (tpl==='executive') bodyStyle = `font-family:Georgia,'Times New Roman',serif;font-size:${9*sc}px;line-height:${1.6*sc};padding:${14*sc}mm 18mm;`;
-  else                   bodyStyle = `font-family:Calibri,'Helvetica Neue',Arial,sans-serif;font-size:${8.5*sc}px;line-height:${1.55*sc};padding:${12*sc}mm 16mm;`;
+  if (tpl === 'tpm') {
+    // ── TPM Pro: pixel-perfect A4 with pt units ─────────────
+    const contactItems = [
+      p.location  && '<span>📍 ' + E(p.location)  + '</span>',
+      p.email     && '<span>✉ '  + E(p.email)     + '</span>',
+      p.phone     && '<span>✆ '  + E(p.phone)     + '</span>',
+      p.linkedin  && '<span>🔗 ' + E(p.linkedin)  + '</span>',
+      p.portfolio && '<span>🔗 ' + E(p.portfolio) + '</span>',
+    ].filter(Boolean).join('<span style="margin:0 7px;color:#888;">||</span>');
 
-  const previewHtml = document.getElementById('rb-preview-content')?.innerHTML || '';
+    const secHdr = (label) =>
+      '<div style="margin-top:11pt;margin-bottom:3.5pt;page-break-after:avoid;">' +
+        '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:12pt;font-weight:700;letter-spacing:0.4pt;color:#111;">' + label + '</div>' +
+        '<div style="height:0.75pt;background:#111;margin-top:1.5pt;"></div>' +
+      '</div>';
 
-  const fullHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+    const jobRow = (title) =>
+      '<div style="display:flex;align-items:stretch;margin-top:6pt;page-break-inside:avoid;">' +
+        '<div style="width:3pt;background:' + ac + ';flex-shrink:0;"></div>' +
+        '<div style="flex:1;background:#EBF4FF;padding:2.5pt 6pt;font-family:Georgia,\'Times New Roman\',serif;font-size:10.5pt;font-weight:700;color:#0a0a0a;">' +
+          E(title) +
+        '</div>' +
+      '</div>';
+
+    const coRow = (company, location, start, end) => {
+      const dates = [start, end].filter(Boolean).join(' – ');
+      const co    = [company, location].filter(Boolean).join(', ');
+      return '<div style="display:flex;justify-content:space-between;align-items:center;background:#EAEAEA;padding:2pt 6pt;margin-bottom:3pt;">' +
+        '<span style="font-family:Georgia,\'Times New Roman\',serif;font-size:10.5pt;font-weight:700;color:#111;">' + E(co) + '</span>' +
+        '<span style="font-family:Arial,sans-serif;font-size:9.5pt;color:#333;">' + E(dates) + '</span>' +
+      '</div>';
+    };
+
+    const domRow = (d) => d
+      ? '<div style="font-family:Georgia,\'Times New Roman\',serif;font-style:italic;font-size:10pt;color:#444;margin-bottom:3.5pt;padding-left:5pt;">' + E(d) + '</div>'
+      : '';
+
+    const bulPt = (t) =>
+      '<div style="display:flex;gap:5pt;margin-bottom:2.5pt;padding-left:2pt;page-break-inside:avoid;">' +
+        '<span style="font-family:Arial,sans-serif;font-size:10.5pt;flex-shrink:0;color:#111;">•</span>' +
+        '<span style="font-family:Arial,sans-serif;font-size:10.5pt;color:#111;line-height:1.45;">' + E(t) + '</span>' +
+      '</div>';
+
+    const sumBuls = rbState.summary.filter(b=>b.trim());
+    const sumPt   = sumBuls.length ? secHdr('SUMMARY') + sumBuls.map(bulPt).join('') : '';
+
+    const vExp  = rbState.experience.filter(e=>e.role);
+    const expPt = vExp.length
+      ? secHdr('PROFESSIONAL EXPERIENCE') +
+        vExp.map(e =>
+          jobRow(e.role) + coRow(e.company, e.location, e.start, e.end) + domRow(e.domain) +
+          e.bullets.filter(b=>b.trim()).map(bulPt).join('')
+        ).join('<div style="height:5pt;"></div>')
+      : '';
+
+    const vEdu  = rbState.education.filter(e=>e.institution);
+    const eduPt = vEdu.length
+      ? secHdr('EDUCATION') +
+        vEdu.map(e => {
+          const yr  = e.end || e.year || '';
+          const df  = [e.degree, e.field].filter(Boolean).join(' - ');
+          const gpa = e.gpa ? ' · GPA ' + E(e.gpa) : '';
+          return '<div style="margin-bottom:5pt;page-break-inside:avoid;">' +
+            '<div style="display:flex;justify-content:space-between;align-items:baseline;">' +
+              '<span style="font-family:Georgia,\'Times New Roman\',serif;font-size:10.5pt;font-weight:700;color:#111;">' + E(e.institution) + '</span>' +
+              '<span style="font-family:Arial,sans-serif;font-size:10pt;color:#333;">' + E(yr) + '</span>' +
+            '</div>' +
+            (df ? '<div style="font-family:Georgia,\'Times New Roman\',serif;font-style:italic;font-size:10pt;color:#333;margin-top:1pt;">' + E(df) + gpa + '</div>' : '') +
+          '</div>';
+        }).join('')
+      : '';
+
+    const sk = rbState.skills;
+    const sCats = [
+      sk.tech  && { label: 'Technical Program Management',  items: sk.tech  },
+      sk.soft  && { label: 'Product & Delivery Leadership', items: sk.soft  },
+      sk.tools && { label: 'Domains',                       items: sk.tools },
+    ].filter(Boolean);
+    const skillsPt = sCats.length
+      ? secHdr('SKILLS') + sCats.map(cat => {
+          const itemsStr = cat.items.split(',').map(s=>s.trim()).filter(Boolean).join(' • ');
+          return '<div style="display:flex;gap:5pt;margin-bottom:3.5pt;padding-left:2pt;page-break-inside:avoid;">' +
+            '<span style="font-family:Arial,sans-serif;font-size:10.5pt;flex-shrink:0;color:#111;">•</span>' +
+            '<span style="font-family:Arial,sans-serif;font-size:10.5pt;color:#111;line-height:1.45;"><strong>' + E(cat.label) + ':</strong> ' + E(itemsStr) + '</span>' +
+          '</div>';
+        }).join('')
+      : '';
+
+    const certPt = rbState.certifications.length
+      ? secHdr('CERTIFICATIONS') +
+        rbState.certifications.map(c =>
+          '<div style="display:flex;gap:5pt;margin-bottom:3pt;padding-left:2pt;">' +
+            '<span style="font-family:Arial,sans-serif;font-size:10.5pt;flex-shrink:0;">•</span>' +
+            '<span style="font-family:Arial,sans-serif;font-size:10.5pt;color:#111;line-height:1.45;"><strong>' + E(c.name) + '</strong>' +
+              (c.issuer ? ' · ' + E(c.issuer) : '') +
+              (c.year   ? ' · ' + E(c.year)   : '') +
+            '</span>' +
+          '</div>'
+        ).join('')
+      : '';
+
+    const vProj  = rbState.projects.filter(pj=>pj.name);
+    const projPt = vProj.length
+      ? secHdr('PROJECTS') +
+        vProj.map(proj => {
+          const ts = proj.tech ? ' <span style="font-style:italic;color:#555;font-size:9.5pt;">[' + E(proj.tech) + ']</span>' : '';
+          return '<div style="margin-bottom:6pt;page-break-inside:avoid;">' +
+            '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:10.5pt;font-weight:700;margin-bottom:2pt;">' + E(proj.name) + ts + '</div>' +
+            proj.bullets.filter(b=>b.trim()).map(bulPt).join('') +
+          '</div>';
+        }).join('')
+      : '';
+
+    bodyContent =
+      '<div style="font-family:Arial,\'Helvetica Neue\',sans-serif;font-size:10.5pt;color:#111;background:white;">' +
+        '<div style="text-align:center;margin-bottom:9pt;">' +
+          '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:22pt;font-weight:700;letter-spacing:1pt;color:#0a0a0a;line-height:1.1;margin-bottom:3pt;">' + E(p.name || 'YOUR NAME') + '</div>' +
+          (p.title ? '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:12.5pt;font-weight:700;color:#222;margin-bottom:3pt;">' + E(p.title) + '</div>' : '') +
+          (contactItems ? '<div style="font-family:Arial,sans-serif;font-size:10pt;color:#333;line-height:1.6;">' + contactItems + '</div>' : '') +
+        '</div>' +
+        sumPt + expPt + eduPt + skillsPt + projPt + certPt +
+      '</div>';
+
+    pageCSS =
+      '@page { size: A4; margin: 13mm 13mm 18mm 13mm; }\n' +
+      'body { font-family: Arial, "Helvetica Neue", sans-serif; font-size: 10.5pt; color: #111; background: white; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }';
+
+  } else {
+    // Non-TPM templates: use existing preview content
+    bodyContent = document.getElementById('rb-preview-content')?.innerHTML || '';
+    if      (tpl === 'modern')  pageCSS = `@page{size:A4;margin:0} body{margin:0;padding:0;font-family:Calibri,"Segoe UI",Arial,sans-serif;font-size:${8.5*sc}px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}`;
+    else if (tpl === 'minimal') pageCSS = `@page{size:A4;margin:12mm 16mm} body{font-family:Calibri,"Helvetica Neue",Arial,sans-serif;font-size:${8.5*sc}px;line-height:${1.55*sc};-webkit-print-color-adjust:exact;print-color-adjust:exact;}`;
+    else                        pageCSS = `@page{size:A4;margin:12mm 14mm} body{font-family:Calibri,"Segoe UI",Arial,sans-serif;font-size:${8.8*sc}px;line-height:${1.5*sc};-webkit-print-color-adjust:exact;print-color-adjust:exact;}`;
+  }
+
+  const fullHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
 <title>${rbE(p.name||'Resume')} — Resume</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-@page{size:A4;margin:0}
-body{background:white;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact;${bodyStyle}}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+${pageCSS}
 </style>
-</head><body>${previewHtml}</body></html>`;
+</head>
+<body>
+${bodyContent}
+</body>
+</html>`;
 
-  // Use Blob URL — no popup blocker issues
-  const blob = new Blob([fullHtml], {type:'text/html'});
+  const blob = new Blob([fullHtml], { type: 'text/html' });
   const url  = URL.createObjectURL(blob);
   const win  = window.open(url, '_blank');
   if (!win) {
-    // Fallback: create iframe or direct download
     const a = document.createElement('a');
-    a.href = url; a.download = `${(p.name||'Resume').replace(/\s+/g,'_')}_Resume.html`;
+    a.href = url;
+    a.download = `${(p.name||'Resume').replace(/\s+/g,'_')}_Resume.html`;
     a.click();
-    showToast('Downloaded as HTML — open it and print to PDF', false);
+    showToast('Downloaded — open the HTML file and Ctrl+P / Cmd+P to save as PDF', false);
   } else {
-    setTimeout(() => { win.focus(); win.print(); URL.revokeObjectURL(url); }, 800);
+    setTimeout(() => { win.focus(); win.print(); URL.revokeObjectURL(url); }, 900);
   }
 }
 
-// ── UTILS ─────────────────────────────────────────────────
+// ── UTILS ──────────────────────────────────────────────────
 function rbVal(id)    { return document.getElementById(id)?.value?.trim()||''; }
 function rbById(id)   { return document.getElementById(id); }
 function rbEsc(s)     { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
