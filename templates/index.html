@@ -545,12 +545,34 @@
     .rb-add-entry-btn { width:100%; background:none; border:1px dashed var(--border); border-radius:var(--radius); padding:12px; color:var(--text-muted); font-family:var(--fm); font-size:.68rem; cursor:pointer; transition:all .18s; display:flex; align-items:center; justify-content:center; gap:8px; letter-spacing:1px; text-transform:uppercase; margin-top:4px; }
     .rb-add-entry-btn:hover { border-color:var(--green); color:var(--green); }
 
-    /* Preview pane */
-    .rb-preview-pane { position:sticky; top:0; background:#fff; border-radius:var(--radius); overflow:hidden; box-shadow:0 8px 40px rgba(0,0,0,.4); }
+    /* Preview pane — paginated document viewer */
+    .rb-preview-pane { position:sticky; top:0; background:var(--surface-2); border-radius:var(--radius); overflow:hidden; box-shadow:0 8px 40px rgba(0,0,0,.4); }
     .rb-preview-toolbar { background:var(--surface-2); border-bottom:1px solid var(--border); padding:10px 14px; display:flex; align-items:center; justify-content:space-between; }
-    .rb-preview-scroll { max-height:80vh; overflow-y:auto; }
-    .rb-preview-scroll::-webkit-scrollbar { width:3px; }
-    .rb-preview-scroll::-webkit-scrollbar-thumb { background:#ddd; }
+    .rb-preview-scroll { max-height:80vh; overflow-y:auto; background:#4a5568; padding:12px 8px; }
+    .rb-preview-scroll::-webkit-scrollbar { width:5px; }
+    .rb-preview-scroll::-webkit-scrollbar-thumb { background:#666; border-radius:3px; }
+    /* Each A4 page rendered as a white sheet with shadow */
+    .rb-page-sheet {
+      background: white;
+      width: 210mm;
+      min-height: 297mm;
+      max-width: 100%;
+      margin: 0 auto 12px auto;
+      box-shadow: 0 2px 12px rgba(0,0,0,.45);
+      border-radius: 2px;
+      overflow: hidden;
+      position: relative;
+    }
+    .rb-page-sheet:last-child { margin-bottom: 0; }
+    /* Page number label */
+    .rb-page-label {
+      text-align: center;
+      font-family: var(--fm);
+      font-size: .58rem;
+      color: #aaa;
+      letter-spacing: 1.5px;
+      padding: 5px 0 8px;
+    }
 
     /* Undo banner */
     .rb-undo-bar { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:#1e293b; border:1px solid var(--border); border-radius:var(--radius); padding:10px 20px; display:flex; gap:14px; align-items:center; font-size:.8rem; color:var(--text); z-index:9999; box-shadow:0 4px 20px rgba(0,0,0,.4); }
@@ -1096,7 +1118,7 @@
                   <span style="font-family:var(--fm);font-size:.6rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-muted);">Live Preview</span>
                   <button class="btn btn-primary" style="padding:7px 16px;font-size:.76rem;" onclick="rbExportPDF()">↓ Export PDF</button>
                 </div>
-                <div class="rb-preview-scroll">
+                <div class="rb-preview-scroll" id="rb-preview-scroll">
                   <div id="rb-preview-content"></div>
                 </div>
               </div>
@@ -2603,16 +2625,64 @@ function rbInsertBullet(listId, el) {
   showToast('Bullet added ✓');
 }
 
-// ── LIVE PREVIEW ──────────────────────────────────────────
-// CHANGE 4: rbRenderPreview routes to rbRenderTPM for 'tpm' template
+// ── LIVE PREVIEW — paginated A4 sheets ───────────────────────
 function rbRenderPreview() {
   const container = document.getElementById('rb-preview-content');
   if (!container) return;
   const tpl = rbState.template;
-  if      (tpl === 'tpm')     container.innerHTML = rbRenderTPM();
-  else if (tpl === 'modern')  container.innerHTML = rbRenderModern();
-  else if (tpl === 'minimal') container.innerHTML = rbRenderMinimal();
-  else                        container.innerHTML = rbRenderClassic();
+
+  let bodyHtml = '';
+  if      (tpl === 'tpm')     bodyHtml = rbRenderTPM();
+  else if (tpl === 'modern')  bodyHtml = rbRenderModern();
+  else if (tpl === 'minimal') bodyHtml = rbRenderMinimal();
+  else                        bodyHtml = rbRenderClassic();
+
+  // ── Paginate: measure real content height via hidden iframe ──────────────
+  // A4 at 96dpi screen = 210mm × 297mm = ~794px × ~1123px
+  // We render into an off-screen iframe at A4 width with the same CSS,
+  // then read scrollHeight to decide how many page sheets to show.
+  const A4_W_PX  = 794;   // 210mm at 96dpi
+  const A4_H_PX  = 1123;  // 297mm at 96dpi
+  // Content area = A4 minus padding (12mm top+bottom, 13mm left+right ≈ 46px top/btm, 50px L/R)
+  const PAD_H    = 46;     // 12mm top + 14mm bottom at 96dpi (~46px)
+  const CONTENT_H = A4_H_PX - PAD_H * 2;
+
+  // Build paginated HTML: render ALL content in one hidden div, then split into pages
+  // We use CSS columns trick: set a fixed height container and let browser paginate
+  // But the most reliable approach for preview is: render full content, show page boundaries as overlays
+
+  // Strategy: render full content as one sheet; overlay faint page-break lines to show
+  // where pages would break. This is visually accurate without needing JS measurement.
+  // For exact page simulation use: one .rb-page-sheet per estimated page.
+
+  // We'll do a quick height estimate: render into a temp hidden div
+  let tempDiv = document.getElementById('_rb_temp_measure');
+  if (!tempDiv) {
+    tempDiv = document.createElement('div');
+    tempDiv.id = '_rb_temp_measure';
+    tempDiv.style.cssText = `position:fixed;left:-9999px;top:0;width:${A4_W_PX}px;visibility:hidden;pointer-events:none;font-family:Arial,sans-serif;font-size:9.5pt;line-height:1.3;padding:46px 50px;box-sizing:border-box;`;
+    document.body.appendChild(tempDiv);
+  }
+  tempDiv.innerHTML = bodyHtml;
+  const contentHeight = tempDiv.scrollHeight;
+  const pageCount = Math.max(1, Math.ceil(contentHeight / CONTENT_H));
+
+  // Render pages: use CSS print pagination via column-based slicing
+  // Each page = a fixed-height clipping window offset into the content
+  let pagesHtml = '';
+  for (let pg = 0; pg < pageCount; pg++) {
+    const offsetY = pg * CONTENT_H;
+    pagesHtml += `
+      <div class="rb-page-label">Page ${pg + 1} of ${pageCount}</div>
+      <div class="rb-page-sheet">
+        <div style="overflow:hidden;height:${CONTENT_H}px;position:relative;">
+          <div style="position:absolute;top:${-offsetY}px;left:0;right:0;">
+            ${bodyHtml}
+          </div>
+        </div>
+      </div>`;
+  }
+  container.innerHTML = pagesHtml;
 }
 
 function rbE(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -2652,9 +2722,9 @@ function rbRenderTPM() {
     '</div>';
 
   const jobTitleRow = (title) =>
-    '<div style="display:flex;align-items:stretch;margin-top:' + (5*sc) + 'px;">' +
-      '<div style="width:3px;background:' + ac + ';flex-shrink:0;"></div>' +
-      '<div style="flex:1;background:#EBF4FF;padding:' + (2*sc) + 'px ' + (6*sc) + 'px;font-family:Georgia,\'Times New Roman\',serif;font-size:' + (9.5*sc) + 'px;font-weight:700;color:#0a0a0a;">' +
+    '<div style="position:relative;margin-top:' + (5*sc) + 'px;padding-left:' + (6*sc) + 'px;">' +
+      '<div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:' + ac + ';"></div>' +
+      '<div style="background:#EBF4FF;padding:' + (2*sc) + 'px ' + (6*sc) + 'px;font-family:Georgia,\'Times New Roman\',serif;font-size:' + (9.5*sc) + 'px;font-weight:700;color:#0a0a0a;">' +
         E(title) +
       '</div>' +
     '</div>';
@@ -2662,9 +2732,9 @@ function rbRenderTPM() {
   const companyRow = (company, location, start, end) => {
     const dates = [start, end].filter(Boolean).join(' – ');
     const co    = [company, location].filter(Boolean).join(', ');
-    return '<div style="display:flex;justify-content:space-between;align-items:center;background:#EAEAEA;padding:' + (2*sc) + 'px ' + (6*sc) + 'px;margin-bottom:' + (3*sc) + 'px;">' +
+    return '<div style="background:#EAEAEA;padding:' + (2*sc) + 'px ' + (6*sc) + 'px;margin-bottom:' + (3*sc) + 'px;overflow:hidden;">' +
       '<span style="font-family:Georgia,\'Times New Roman\',serif;font-size:' + (9.5*sc) + 'px;font-weight:700;color:#111;">' + E(co) + '</span>' +
-      '<span style="font-family:Arial,sans-serif;font-size:' + (9*sc) + 'px;color:#333;">' + E(dates) + '</span>' +
+      (dates ? '<span style="float:right;font-family:Arial,sans-serif;font-size:' + (9*sc) + 'px;color:#333;">' + E(dates) + '</span>' : '') +
     '</div>';
   };
 
@@ -2687,11 +2757,15 @@ function rbRenderTPM() {
   const expHtml = validExp.length
     ? secHdr('PROFESSIONAL EXPERIENCE') +
       validExp.map(e =>
-        jobTitleRow(e.role) +
-        companyRow(e.company, e.location, e.start, e.end) +
-        domainRow(e.domain) +
-        e.bullets.filter(b => b.trim()).map(bul).join('')
-      ).join('<div style="height:' + (4*sc) + 'px;"></div>')
+        // break-inside:avoid on a BLOCK container (not flex) is the only reliable
+        // cross-browser way to prevent an entry splitting across pages.
+        '<div style="break-inside:avoid;page-break-inside:avoid;display:block;margin-bottom:' + (4*sc) + 'px;">' +
+          jobTitleRow(e.role) +
+          companyRow(e.company, e.location, e.start, e.end) +
+          domainRow(e.domain) +
+          e.bullets.filter(b => b.trim()).map(bul).join('') +
+        '</div>'
+      ).join('')
     : '';
 
   // Education
@@ -2860,9 +2934,9 @@ function rbExportPDF() {
       '</div>';
 
     const jobRow = (title) =>
-      '<div style="display:flex;align-items:stretch;margin-top:4pt;page-break-inside:avoid;">' +
-        '<div style="width:3pt;background:' + ac + ';flex-shrink:0;"></div>' +
-        '<div style="flex:1;background:#EBF4FF;padding:2pt 5pt;font-family:Georgia,\'Times New Roman\',serif;font-size:9.5pt;font-weight:700;color:#0a0a0a;">' +
+      '<div style="position:relative;margin-top:4pt;padding-left:6pt;">' +
+        '<div style="position:absolute;left:0;top:0;bottom:0;width:3pt;background:' + ac + ';"></div>' +
+        '<div style="background:#EBF4FF;padding:2pt 5pt;font-family:Georgia,\'Times New Roman\',serif;font-size:9.5pt;font-weight:700;color:#0a0a0a;">' +
           E(title) +
         '</div>' +
       '</div>';
@@ -2870,9 +2944,9 @@ function rbExportPDF() {
     const coRow = (company, location, start, end) => {
       const dates = [start, end].filter(Boolean).join(' – ');
       const co    = [company, location].filter(Boolean).join(', ');
-      return '<div style="display:flex;justify-content:space-between;align-items:center;background:#EAEAEA;padding:1.5pt 5pt;margin-bottom:2pt;">' +
+      return '<div style="background:#EAEAEA;padding:1.5pt 5pt;margin-bottom:2pt;overflow:hidden;">' +
         '<span style="font-family:Georgia,\'Times New Roman\',serif;font-size:9.5pt;font-weight:700;color:#111;">' + E(co) + '</span>' +
-        '<span style="font-family:Arial,sans-serif;font-size:9pt;color:#333;">' + E(dates) + '</span>' +
+        (dates ? '<span style="float:right;font-family:Arial,sans-serif;font-size:9pt;color:#333;">' + E(dates) + '</span>' : '') +
       '</div>';
     };
 
@@ -2893,9 +2967,17 @@ function rbExportPDF() {
     const expPt = vExp.length
       ? secHdr('PROFESSIONAL EXPERIENCE') +
         vExp.map(e =>
-          jobRow(e.role) + coRow(e.company, e.location, e.start, e.end) + domRow(e.domain) +
-          e.bullets.filter(b=>b.trim()).map(bulPt).join('')
-        ).join('<div style="height:3pt;"></div>')
+          // break-inside:avoid MUST be on a display:block element — flex containers
+          // are ignored by the browser's page-break engine in many implementations.
+          // Both the CSS3 property (break-inside) and legacy (page-break-inside) are
+          // set for maximum browser compatibility (Chrome, Firefox, Edge, Safari).
+          '<div style="break-inside:avoid;page-break-inside:avoid;display:block;margin-bottom:3pt;">' +
+            jobRow(e.role) +
+            coRow(e.company, e.location, e.start, e.end) +
+            domRow(e.domain) +
+            e.bullets.filter(b=>b.trim()).map(bulPt).join('') +
+          '</div>'
+        ).join('')
       : '';
 
     const vEdu  = rbState.education.filter(e=>e.institution);
@@ -2970,8 +3052,10 @@ function rbExportPDF() {
       '/* Zero @page margins eliminate browser-injected URL, date and page-number headers/footers */\n' +
       '@page { size: A4; margin: 0; }\n' +
       'html, body { margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }\n' +
-      '/* The .page wrapper carries the real document margins so content still has breathing room */\n' +
-      '.page { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 12mm 13mm 14mm 13mm; font-family: Arial, "Helvetica Neue", sans-serif; font-size: 9.5pt; color: #111; box-sizing: border-box; }';
+      '/* The .page wrapper carries the real document margins */\n' +
+      '.page { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 12mm 13mm 14mm 13mm; font-family: Arial, "Helvetica Neue", sans-serif; font-size: 9.5pt; color: #111; box-sizing: border-box; }\n' +
+      '/* Critical: block elements with break-inside:avoid must be display:block — flex breaks the property */\n' +
+      'div[style*="break-inside:avoid"] { display: block !important; break-inside: avoid; page-break-inside: avoid; }';
 
   } else {
     // Non-TPM templates: use existing preview content
