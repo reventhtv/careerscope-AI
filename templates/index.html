@@ -588,6 +588,27 @@
     .rb-float-footer { background:var(--surface); border-top:1px solid var(--border); padding:8px 14px; display:flex; gap:8px; align-items:center; flex-shrink:0; }
 
     /* Toggle preview button */
+    /* ── DENSITY INDICATOR ── */
+    .rb-density-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      margin-bottom: 12px;
+      display: flex; align-items: center; gap: 16px;
+      font-family: var(--fm); font-size: .62rem;
+    }
+    .rb-density-item { display:flex; align-items:center; gap:6px; }
+    .rb-density-label { color: var(--text-muted); letter-spacing:.5px; text-transform:uppercase; }
+    .rb-density-val { font-weight:600; color: var(--text); }
+    .rb-density-val.good  { color: var(--green); }
+    .rb-density-val.warn  { color: var(--yellow); }
+    .rb-density-val.high  { color: var(--orange); }
+    .rb-density-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+    .rb-density-dot.good  { background: var(--green); }
+    .rb-density-dot.warn  { background: var(--yellow); }
+    .rb-density-dot.high  { background: var(--orange); }
+
     .rb-preview-toggle {
       background: var(--accent-dim); color: var(--accent);
       border: 1px solid rgba(0,212,255,.3); border-radius: var(--radius-sm);
@@ -1061,6 +1082,27 @@
 
               <!-- Resume QA Panel -->
               <div id="rb-qa-panel" style="background:var(--surface);border:1px solid rgba(255,109,53,.3);border-radius:var(--radius-sm);margin-bottom:12px;overflow:hidden;min-height:36px;"></div>
+
+              <!-- Resume Density Indicator -->
+              <div class="rb-density-panel" id="rb-density-panel">
+                <div class="rb-density-item">
+                  <span class="rb-density-dot good" id="rb-den-dot"></span>
+                  <span class="rb-density-label">Density</span>
+                  <span class="rb-density-val good" id="rb-den-rating">—</span>
+                </div>
+                <div class="rb-density-item">
+                  <span class="rb-density-label">Bullets</span>
+                  <span class="rb-density-val" id="rb-den-bullets">—</span>
+                </div>
+                <div class="rb-density-item">
+                  <span class="rb-density-label">Words</span>
+                  <span class="rb-density-val" id="rb-den-words">—</span>
+                </div>
+                <div class="rb-density-item">
+                  <span class="rb-density-label">Est. Pages</span>
+                  <span class="rb-density-val" id="rb-den-pages">—</span>
+                </div>
+              </div>
 
               <!-- Autofill status banner -->
               <div id="rb-fill-banner" style="display:none;align-items:center;gap:12px;background:var(--purple-dim);border:1px solid rgba(180,124,255,.25);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;">
@@ -2247,6 +2289,7 @@ function rbSync() {
   rbUpdateSectionStatus();
   rbRenderPreview();
   rbRunQA();
+  rbUpdateDensity();
 
   clearTimeout(rbAtsTimer);
   rbAtsTimer = setTimeout(rbUpdateATS, 600);
@@ -3106,7 +3149,61 @@ function _rbNormalizeName(name) {
   }).join(' ');
 }
 
-// ── FONT SELECTOR ──────────────────────────────────────────────
+// ── DENSITY INDICATOR ───────────────────────────────────────────
+function rbUpdateDensity() {
+  // Count all content
+  const allBullets = [
+    ...rbState.summary,
+    ...rbState.experience.flatMap(e => e.bullets.filter(b => b.trim())),
+    ...rbState.projects.flatMap(p => p.bullets.filter(b => b.trim())),
+    ...rbState.achievements.filter(a => a.trim()),
+  ];
+  const totalWords = [
+    rbState.summary.join(' '),
+    rbState.experience.map(e => e.role + ' ' + e.company + ' ' + e.bullets.join(' ')).join(' '),
+    rbState.education.map(e => e.institution + ' ' + e.degree).join(' '),
+    rbState.skills.tech + ' ' + rbState.skills.soft + ' ' + rbState.skills.tools,
+    rbState.certifications.map(c => c.name).join(' '),
+  ].join(' ').split(/\s+/).filter(w => w.length > 0).length;
+
+  // Estimate pages based on measurement div
+  const tempDiv = document.getElementById('_rb_temp_measure');
+  let estimatedPages = 1;
+  if (tempDiv) {
+    const A4_H_PX   = 1123;
+    const CONTENT_H = A4_H_PX - 92;
+    estimatedPages = Math.max(1, Math.ceil(tempDiv.scrollHeight / CONTENT_H));
+  }
+
+  // Bullet density (optimal = 3-5 per role, high = >6)
+  const expEntries = rbState.experience.filter(e => e.role).length;
+  const avgBulletsPerRole = expEntries > 0
+    ? (rbState.experience.reduce((s, e) => s + e.bullets.filter(b=>b.trim()).length, 0) / expEntries).toFixed(1)
+    : 0;
+
+  // Rating
+  let rating = 'Optimal', cls = 'good';
+  if (estimatedPages > 2) { rating = 'Too Dense'; cls = 'high'; }
+  else if (avgBulletsPerRole > 6) { rating = 'High'; cls = 'warn'; }
+  else if (totalWords < 200) { rating = 'Light'; cls = 'warn'; }
+
+  // Update UI
+  const setEl = (id, txt, extraCls) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = txt;
+    if (extraCls) { el.className = 'rb-density-val ' + extraCls; }
+  };
+  const dot = document.getElementById('rb-den-dot');
+  if (dot) dot.className = 'rb-density-dot ' + cls;
+  setEl('rb-den-rating',  rating,              cls);
+  setEl('rb-den-bullets', allBullets.length + ' total');
+  setEl('rb-den-words',   totalWords + ' words');
+  setEl('rb-den-pages',   estimatedPages + (estimatedPages === 1 ? ' page' : ' pages'),
+        estimatedPages > 2 ? 'high' : estimatedPages === 2 ? 'warn' : 'good');
+}
+
+// ── FONT SELECTOR ────────────────────────────────────────────────
 function rbSetFont(v) {
   rbState.font = v;
   rbSync();
@@ -3396,11 +3493,11 @@ function rbRenderTPM(mode) {
   const LINK_S = isPrint ? 8.5 : 8.5;   // contact line 2
 
   // Spacing (all readable values)
-  const SEC_MT  = isPrint ? 14 : 14;  // section margin-top
-  const SEC_MB  = isPrint ? 6  : 6;   // section header bottom margin
-  const ENT_MB  = isPrint ? 10 : 10;  // between experience entries
-  const BUL_MB  = isPrint ? 5  : 5;   // between bullets — key readability value
-  const BUL_LH  = 1.5;               // bullet line height
+  const SEC_MT  = isPrint ? 10 : 12;  // section margin-top (print tighter for 2-page fit)
+  const SEC_MB  = isPrint ? 4  : 5;   // section header bottom margin
+  const ENT_MB  = isPrint ? 7  : 9;   // between experience entries
+  const BUL_MB  = isPrint ? 3  : 4;   // between bullets
+  const BUL_LH  = 1.45;              // bullet line height
   const PAD_H   = isPrint ? '14mm' : '50px';  // horizontal padding
   const PAD_V   = isPrint ? '13mm' : '46px';  // vertical padding
 
@@ -3443,21 +3540,51 @@ function rbRenderTPM(mode) {
     '</div>';
 
   // ── EXPERIENCE ROW HELPERS ───────────────────────────────
-  const jobTitleRow = (title) =>
-    '<div style="position:relative;margin-top:' + (2*sc) + u + ';padding-left:' + (6*sc) + u + ';' + (isPrint ? 'page-break-after:avoid;' : '') + '">' +
-      '<div style="position:absolute;left:0;top:0;bottom:0;width:' + (isPrint ? '3pt' : '3px') + ';background:' + ac + ';"></div>' +
+  const jobTitleRow = (title) => {
+    if (isPrint) {
+      // Print mode: use border-left instead of position:absolute
+      // position:absolute causes the container to report zero height to the print layout engine
+      // which renders the role title out of its correct position in the printed PDF.
+      // border-left is fully reliable across all print engines (Chrome, Firefox, Edge, Safari).
+      return '<div style="margin-top:' + (2*sc) + u + ';page-break-after:avoid;">' +
+        '<div style="border-left:3' + u + ' solid ' + ac + ';background:#EBF4FF;' +
+             'padding:' + (3*sc) + u + ' ' + (5*sc) + u + ';' +
+             'font-family:' + SERIF + ';font-size:' + (COMP_S*sc) + u + ';font-weight:700;color:#0a0a0a;' +
+             'word-wrap:break-word;overflow-wrap:break-word;display:block;">' +
+          E(title) +
+        '</div>' +
+      '</div>';
+    }
+    // Screen mode: keep position:relative for visual accent bar
+    return '<div style="position:relative;margin-top:' + (2*sc) + u + ';padding-left:' + (6*sc) + u + ';">' +
+      '<div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:' + ac + ';"></div>' +
       '<div style="background:#EBF4FF;padding:' + (3*sc) + u + ' ' + (6*sc) + u + ';' +
            'font-family:' + SERIF + ';font-size:' + (COMP_S*sc) + u + ';font-weight:700;color:#0a0a0a;' +
            'word-wrap:break-word;overflow-wrap:break-word;">' +
         E(title) +
       '</div>' +
     '</div>';
+  };
 
   const companyRow = (company, location, start, end) => {
     const dates = [start, end].filter(Boolean).join(' – ');
     const co    = [company, location].filter(Boolean).join(', ');
-    // CRITICAL: use flex not float:right — float escapes break-inside:avoid in print mode
-    // causing dates to appear at top of next page separated from their entry
+    if (isPrint) {
+      // Print mode: display:table guarantees company and dates stay on one line,
+      // properly separated, without any text merging.
+      // display:flex becomes block in some print engines → text merges.
+      // display:table is universally supported in all print engines.
+      return '<div style="display:table;width:100%;background:#EAEAEA;' +
+                   'margin-bottom:' + (2.5*sc) + u + ';page-break-inside:avoid;">' +
+        '<div style="display:table-cell;font-family:' + SERIF + ';font-size:' + (COMP_S*sc) + u + ';' +
+             'font-weight:700;color:#111;padding:' + (2.5*sc) + u + ' ' + (4*sc) + u + ';' +
+             'word-wrap:break-word;">' + E(co) + '</div>' +
+        (dates ? '<div style="display:table-cell;font-family:' + SANS + ';font-size:' + (SUB_S*sc) + u + ';' +
+                 'color:#444;white-space:nowrap;text-align:right;vertical-align:middle;' +
+                 'padding:' + (2.5*sc) + u + ' ' + (4*sc) + u + ';width:1px;">' + E(dates) + '</div>' : '') +
+      '</div>';
+    }
+    // Screen mode: flex layout (works perfectly on screen)
     return '<div style="background:#EAEAEA;padding:' + (2.5*sc) + u + ' ' + (6*sc) + u + ';' +
                  'margin-bottom:' + (3*sc) + u + ';' +
                  'display:flex;justify-content:space-between;align-items:center;' +
@@ -3478,11 +3605,25 @@ function rbRenderTPM(mode) {
   const bul = (text) => {
     const ct = text.replace(/^[•\-\*\u25b8\s]+/, '').trim();
     if (!ct) return '';
-    // Use "• " with a real space so ATS text extraction sees "• text" not "•text"
+    if (isPrint) {
+      // Print mode: use display:table-row approach with explicit space character
+      // Flex gap does not produce whitespace in PDF text extraction (ATS reads "•text" not "• text").
+      // Non-breaking space after bullet ensures "• text" in extracted text.
+      return '<div style="display:table;width:100%;margin-bottom:' + (BUL_MB*sc) + u + ';' +
+                   'page-break-inside:avoid;">' +
+        '<div style="display:table-cell;width:' + (10*sc) + u + ';font-family:' + SANS + ';' +
+             'font-size:' + (BUL_S*sc) + u + ';color:#111;line-height:' + BUL_LH + ';' +
+             'vertical-align:top;padding-left:' + (3*sc) + u + ';">• </div>' +
+        '<div style="display:table-cell;font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';' +
+             'color:#111;line-height:' + BUL_LH + ';vertical-align:top;' +
+             'word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;">' + E(ct) + '</div>' +
+      '</div>';
+    }
+    // Screen mode: flex layout
     return '<div style="display:flex;gap:' + (3*sc) + u + ';margin-bottom:' + (BUL_MB*sc) + u + ';' +
-                 'padding-left:' + (3*sc) + u + ';' + (isPrint ? 'page-break-inside:avoid;' : '') + '">' +
+                 'padding-left:' + (3*sc) + u + ';">' +
       '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';flex-shrink:0;' +
-            'color:#111;line-height:' + BUL_LH + ';padding-right:' + (2*sc) + u + ';">•</span>' +
+            'color:#111;line-height:' + BUL_LH + ';min-width:' + (8*sc) + u + ';">•</span>' +
       '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';color:#111;line-height:' + BUL_LH + ';' +
             'word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;flex:1;">' + E(ct) + '</span>' +
     '</div>';
@@ -3527,11 +3668,20 @@ function rbRenderTPM(mode) {
         const yr       = e.end || e.year || '';
         const degField = [e.degree, e.field].filter(Boolean).join(' – ');
         const gpaStr   = e.gpa ? ' · GPA ' + E(e.gpa) : '';
+        const eduInstitutionRow = isPrint
+          // Print: table layout ensures year never merges with institution name
+          ? '<div style="display:table;width:100%;page-break-inside:avoid;">' +
+              '<div style="display:table-cell;font-family:' + SERIF + ';font-size:' + (COMP_S*sc) + u + ';font-weight:700;color:#111;word-wrap:break-word;">' + E(e.institution) + '</div>' +
+              (yr ? '<div style="display:table-cell;font-family:' + SANS + ';font-size:' + (SUB_S*sc) + u + ';color:#444;white-space:nowrap;text-align:right;vertical-align:baseline;width:1px;">' + E(yr) + '</div>' : '') +
+            '</div>'
+          // Screen: flex layout
+          : '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:' + (6*sc) + u + ';">' +
+              '<span style="font-family:' + SERIF + ';font-size:' + (COMP_S*sc) + u + ';font-weight:700;color:#111;word-wrap:break-word;flex:1;">' + E(e.institution) + '</span>' +
+              (yr ? '<span style="font-family:' + SANS + ';font-size:' + (SUB_S*sc) + u + ';color:#444;white-space:nowrap;flex-shrink:0;">' + E(yr) + '</span>' : '') +
+            '</div>';
+
         return '<div style="margin-bottom:' + (6*sc) + u + ';' + (isPrint ? 'page-break-inside:avoid;' : '') + '">' +
-          '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:' + (6*sc) + u + ';">' +
-            '<span style="font-family:' + SERIF + ';font-size:' + (COMP_S*sc) + u + ';font-weight:700;color:#111;word-wrap:break-word;flex:1;">' + E(e.institution) + '</span>' +
-            '<span style="font-family:' + SANS + ';font-size:' + (SUB_S*sc) + u + ';color:#444;white-space:nowrap;flex-shrink:0;">' + E(yr) + '</span>' +
-          '</div>' +
+          eduInstitutionRow +
           (degField ? '<div style="font-family:' + SERIF + ';font-style:italic;font-size:' + (SUB_S*sc) + u + ';color:#444;margin-top:' + (2*sc) + u + ';line-height:' + BUL_LH + ';">' + E(degField) + gpaStr + '</div>' : '') +
         '</div>';
       }).join('')
@@ -3561,13 +3711,21 @@ function rbRenderTPM(mode) {
           '<div style="font-family:' + SERIF + ';font-size:' + (9*sc) + u + ';font-weight:700;color:#1F3A93;' +
                'margin-bottom:' + (3*sc) + u + ';letter-spacing:0.3' + u + ';">' + E(cat.label) + '</div>' +
           rows.map(row =>
-            '<div style="display:flex;gap:' + (3*sc) + u + ';margin-bottom:' + (3*sc) + u + ';' +
-                 'padding-left:' + (3*sc) + u + ';">' +
-              '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';flex-shrink:0;' +
-                    'color:#1F3A93;line-height:' + BUL_LH + ';padding-right:' + (2*sc) + u + ';">•</span>' +
-              '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';color:#111;' +
-                    'line-height:' + BUL_LH + ';word-wrap:break-word;flex:1;">' + E(row) + '</span>' +
-            '</div>'
+            isPrint
+              ? '<div style="display:table;width:100%;margin-bottom:' + (3*sc) + u + ';">' +
+                  '<div style="display:table-cell;width:' + (10*sc) + u + ';font-family:' + SANS + ';' +
+                       'font-size:' + (BUL_S*sc) + u + ';color:#1F3A93;line-height:' + BUL_LH + ';' +
+                       'vertical-align:top;padding-left:' + (3*sc) + u + ';">• </div>' +
+                  '<div style="display:table-cell;font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';' +
+                       'color:#111;line-height:' + BUL_LH + ';vertical-align:top;word-wrap:break-word;">' + E(row) + '</div>' +
+                '</div>'
+              : '<div style="display:flex;gap:' + (3*sc) + u + ';margin-bottom:' + (3*sc) + u + ';' +
+                     'padding-left:' + (3*sc) + u + ';">' +
+                  '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';flex-shrink:0;' +
+                        'color:#1F3A93;line-height:' + BUL_LH + ';min-width:' + (8*sc) + u + ';">•</span>' +
+                  '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';color:#111;' +
+                        'line-height:' + BUL_LH + ';word-wrap:break-word;flex:1;">' + E(row) + '</span>' +
+                '</div>'
           ).join('') +
         '</div>';
       }).join('')
@@ -3577,15 +3735,27 @@ function rbRenderTPM(mode) {
   const certHtml = rbState.certifications.filter(c => c.name).length
     ? secHdr('CERTIFICATIONS') +
       rbState.certifications.filter(c => c.name).map(c =>
-        '<div style="display:flex;gap:' + (3*sc) + u + ';margin-bottom:' + (BUL_MB*sc) + u + ';padding-left:' + (3*sc) + u + ';">' +
-          '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';flex-shrink:0;color:#1F3A93;' +
-               'line-height:' + BUL_LH + ';padding-right:' + (2*sc) + u + ';">•</span>' +
-          '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';color:#111;line-height:' + BUL_LH + ';">' +
-            '<strong>' + E(c.name) + '</strong>' +
-            (c.issuer ? ' <span style="color:#555;">· ' + E(c.issuer) + '</span>' : '') +
-            (c.year   ? ' <span style="color:#555;">· ' + E(c.year)   + '</span>' : '') +
-          '</span>' +
-        '</div>'
+        isPrint
+          ? '<div style="display:table;width:100%;margin-bottom:' + (BUL_MB*sc) + u + ';">' +
+              '<div style="display:table-cell;width:' + (10*sc) + u + ';font-family:' + SANS + ';' +
+                   'font-size:' + (BUL_S*sc) + u + ';color:#1F3A93;vertical-align:top;' +
+                   'padding-left:' + (3*sc) + u + ';line-height:' + BUL_LH + ';">• </div>' +
+              '<div style="display:table-cell;font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';' +
+                   'color:#111;line-height:' + BUL_LH + ';vertical-align:top;">' +
+                '<strong>' + E(c.name) + '</strong>' +
+                (c.issuer ? ' · ' + E(c.issuer) : '') +
+                (c.year   ? ' · ' + E(c.year)   : '') +
+              '</div>' +
+            '</div>'
+          : '<div style="display:flex;gap:' + (3*sc) + u + ';margin-bottom:' + (BUL_MB*sc) + u + ';padding-left:' + (3*sc) + u + ';">' +
+              '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';flex-shrink:0;color:#1F3A93;' +
+                   'line-height:' + BUL_LH + ';min-width:' + (8*sc) + u + ';">•</span>' +
+              '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';color:#111;line-height:' + BUL_LH + ';">' +
+                '<strong>' + E(c.name) + '</strong>' +
+                (c.issuer ? ' <span style="color:#555;">· ' + E(c.issuer) + '</span>' : '') +
+                (c.year   ? ' <span style="color:#555;">· ' + E(c.year)   + '</span>' : '') +
+              '</span>' +
+            '</div>'
       ).join('')
     : '';
 
@@ -3932,18 +4102,15 @@ function rbExportPDF() {
     const printHtml = rbRenderTPM('print');
     bodyContent = printHtml;
 
-    const baseLH = (1.5 * sc).toFixed(2);
+    const baseLH = (1.45 * sc).toFixed(2);
     pageCSS =
       '/* @page margin:0 eliminates browser URL/date/page headers & footers */\n' +
       '@page { size: A4; margin: 0; }\n' +
       'html, body { margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }\n' +
       '* { box-sizing: border-box; word-wrap: break-word; overflow-wrap: break-word; }\n' +
-      'body { line-height: ' + baseLH + '; }\n' +
-      '/* block elements with break-inside:avoid must be display:block */\n' +
-      'div[style*="break-inside:avoid"] { display: block !important; break-inside: avoid; page-break-inside: avoid; }\n' +
-      '/* Prevent flex items from being torn apart across page breaks */\n' +
-      'div[style*="display:flex"] { display: block !important; }\n' +
-      'div[style*="display: flex"] { display: block !important; }';
+      'body { line-height: ' + baseLH + '; font-size: 9.5pt; }\n' +
+      '/* Only break-inside:avoid entry wrappers need display:block enforcement */\n' +
+      'div[style*="break-inside:avoid"] { display: block !important; break-inside: avoid; page-break-inside: avoid; }';
 
   } else {
     // Non-TPM: extract the raw resume HTML from the measurement div (no page-sheet chrome)
