@@ -547,11 +547,9 @@
 
     /* Preview pane — paginated document viewer */
     /* ── INLINE PREVIEW (right column, always visible) ── */
-    .rb-preview-pane { position:sticky; top:0; background:var(--surface-2); border-radius:var(--radius); overflow:hidden; box-shadow:0 8px 40px rgba(0,0,0,.4); }
+    .rb-preview-pane { position:sticky; top:0; background:var(--surface-2); border-radius:var(--radius); box-shadow:0 8px 40px rgba(0,0,0,.4); }
     .rb-preview-toolbar { background:var(--surface-2); border-bottom:1px solid var(--border); padding:10px 14px; display:flex; align-items:center; justify-content:space-between; }
     .rb-preview-scroll { max-height:80vh; overflow-y:auto; background:#2d3748; padding:12px 8px; }
-    /* Scale A4 pages to fit the preview column without horizontal scroll */
-    .rb-page-sheet { transform-origin: top center; }
     .rb-preview-scroll::-webkit-scrollbar { width:5px; }
     .rb-preview-scroll::-webkit-scrollbar-thumb { background:#666; border-radius:3px; }
 
@@ -585,6 +583,8 @@
     .rb-float-scroll { flex:1; overflow-y:auto; background:#2d3748; padding:12px 8px; }
     .rb-float-scroll::-webkit-scrollbar { width:4px; }
     .rb-float-scroll::-webkit-scrollbar-thumb { background:#555; border-radius:2px; }
+    /* Float panel page sheets are sized by JS inline style */
+    #rb-float-scroll .rb-page-sheet { min-height:unset; }
     .rb-float-footer { background:var(--surface); border-top:1px solid var(--border); padding:8px 14px; display:flex; gap:8px; align-items:center; flex-shrink:0; }
 
     /* Toggle preview button */
@@ -619,23 +619,16 @@
     .rb-preview-toggle.active { background: rgba(0,212,255,.18); box-shadow: 0 0 12px rgba(0,212,255,.2); }
 
     /* Each A4 page rendered as a white sheet with shadow */
-    /* Auto-scales to fit preview column — A4 = 794px, column ≈ 100% of preview pane */
+    /* Simple approach: full-width white card, scrollable. Export is always full A4 pt-unit. */
     .rb-page-sheet {
       background: white;
-      width: 794px;
-      min-height: 1123px;
-      margin: 0 auto 12px auto;
+      width: 100%;
+      min-height: 400px;
+      margin: 0 0 12px 0;
       box-shadow: 0 2px 16px rgba(0,0,0,.5);
       border-radius: 2px;
       overflow: hidden;
       position: relative;
-      transform-origin: top center;
-    }
-    /* Scale down to fit the preview scroll area (max ~420px wide) */
-    #rb-preview-scroll .rb-page-sheet,
-    #rb-float-scroll .rb-page-sheet {
-      transform: scale(0.52);
-      margin-bottom: calc((1123px * 0.52) - 1123px + 12px);
     }
     .rb-page-sheet:last-child { margin-bottom: 0; }
     .rb-page-label {
@@ -2118,7 +2111,9 @@ function rbShowEditor() {
   rbOpenSec('personal');
 
   if (sessionId && !rbAutoFillDone) rbAutoFill();
-  else rbSync();
+  else { rbSync(); }
+  // Force immediate preview render (bypasses debounce) on first show
+  setTimeout(_rbRenderPreviewNow, 50);
 }
 
 function rbShowGallery() {
@@ -4457,25 +4452,38 @@ function _rbPaginateInto(container, bodyHtml, floatScale) {
 
   let html = '';
   for (let pg = 0; pg < pageCount; pg++) {
-    const offsetY   = pg * CONTENT_H;
-    const isSpill   = rbSpillState.spillingEntries.some(s => s.page === pg);
-    const scaleAttr = floatScale ? `transform:scale(${floatScale});transform-origin:top left;width:${Math.round(100/floatScale)}%;` : '';
-    const heightAttr = floatScale ? `height:${Math.round(CONTENT_H * floatScale)}px;` : '';
-    const wrapStyle  = floatScale
-      ? `overflow:hidden;${heightAttr}position:relative;`
-      : `overflow:hidden;height:${CONTENT_H}px;position:relative;`;
-    const innerStyle = floatScale
-      ? `position:absolute;top:${-offsetY}px;left:0;right:0;${scaleAttr}`
-      : `position:absolute;top:${-offsetY}px;left:0;right:0;`;
+    const offsetY = pg * CONTENT_H;
+    const isSpill = rbSpillState.spillingEntries.some(s => s.page === pg);
 
-    html += `
-      <div class="rb-page-label">Page ${pg + 1} of ${pageCount}</div>
-      <div class="rb-page-sheet">
-        <div style="${wrapStyle}">
-          <div style="${innerStyle}">${bodyHtml}</div>
-        </div>
-        ${isSpill ? '<div class="rb-spill-sheet-badge">&#9888; Entry splits here</div>' : ''}
-      </div>`;
+    if (floatScale) {
+      // Float panel: scale down with clipping so each page shows a cropped slice
+      const scaledH = Math.round(CONTENT_H * floatScale);
+      html += `
+        <div class="rb-page-label">Page \${pg + 1} of \${pageCount}</div>
+        <div class="rb-page-sheet" style="height:\${scaledH}px;min-height:unset;">
+          <div style="overflow:hidden;height:\${scaledH}px;position:relative;">
+            <div style="position:absolute;top:0;left:0;right:0;
+              transform:scale(\${floatScale}) translateY(\${-offsetY}px);
+              transform-origin:top left;width:\${Math.round(100/floatScale)}%;">
+              \${bodyHtml}
+            </div>
+          </div>
+          \${isSpill ? '<div class="rb-spill-sheet-badge">&#9888; Entry splits here</div>' : ''}
+        </div>`;
+    } else {
+      // Inline right column: show FULL resume content on page 1 (scrollable),
+      // subsequent pages show their slice. Simple clip approach.
+      html += `
+        <div class="rb-page-label">Page \${pg + 1} of \${pageCount}</div>
+        <div class="rb-page-sheet">
+          <div style="overflow:hidden;height:\${CONTENT_H}px;position:relative;">
+            <div style="position:absolute;top:\${-offsetY}px;left:0;right:0;">
+              \${bodyHtml}
+            </div>
+          </div>
+          \${isSpill ? '<div class="rb-spill-sheet-badge">&#9888; Entry splits here</div>' : ''}
+        </div>`;
+    }
   }
   container.innerHTML = html;
   return pageCount;
