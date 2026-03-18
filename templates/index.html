@@ -3493,10 +3493,10 @@ function rbRenderTPM(mode) {
   const LINK_S = isPrint ? 8.5 : 8.5;   // contact line 2
 
   // Spacing (all readable values)
-  const SEC_MT  = isPrint ? 10 : 12;  // section margin-top (print tighter for 2-page fit)
-  const SEC_MB  = isPrint ? 4  : 5;   // section header bottom margin
-  const ENT_MB  = isPrint ? 7  : 12;  // between experience entries (14px effective with padding)
-  const BUL_MB  = isPrint ? 3  : 5;   // between bullets (5px screen, 3pt print)
+  const SEC_MT  = isPrint ?  9 : 12;  // section margin-top
+  const SEC_MB  = isPrint ?  4 :  5;  // section header bottom margin
+  const ENT_MB  = isPrint ?  7 : 10;  // between experience entries
+  const BUL_MB  = isPrint ?  4 :  5;  // between bullets (5px ≈ 4pt)
   const BUL_LH  = 1.45;              // bullet line height
   const PAD_H   = isPrint ? '14mm' : '50px';  // horizontal padding
   const PAD_V   = isPrint ? '13mm' : '46px';  // vertical padding
@@ -3522,9 +3522,9 @@ function rbRenderTPM(mode) {
   ].filter(Boolean).join(sep);
 
   const cLine2 = [
-    !_isPH(p.linkedin)  && (isPrint ? _clean(p.linkedin)  : '🔗 ' + E(p.linkedin)),
-    !_isPH(p.portfolio) && (isPrint ? _clean(p.portfolio) : '🔗 ' + E(p.portfolio)),
-    !_isPH(p.website)   && (isPrint ? _clean(p.website)   : '🌐 ' + E(p.website)),
+    !_isPH(p.linkedin)  && (isPrint ? 'LinkedIn: '  + _clean(p.linkedin)  : '🔗 ' + E(p.linkedin)),
+    !_isPH(p.portfolio) && (isPrint ? 'GitHub: '    + _clean(p.portfolio) : '🔗 ' + E(p.portfolio)),
+    !_isPH(p.website)   && (isPrint ? 'Portfolio: ' + _clean(p.website)   : '🌐 ' + E(p.website)),
   ].filter(Boolean).join(sep);
 
   const contactBlock =
@@ -3533,7 +3533,8 @@ function rbRenderTPM(mode) {
 
   // ── SECTION HEADER ────────────────────────────────────────
   const secHdr = (label) =>
-    '<div style="margin-top:' + (SEC_MT*sc) + u + ';margin-bottom:' + (SEC_MB*sc) + u + ';' + (isPrint ? 'page-break-after:avoid;' : '') + '">' +
+    '<div style="margin-top:' + (SEC_MT*sc) + u + ';margin-bottom:' + (SEC_MB*sc) + u + ';' +
+         (isPrint ? 'page-break-after:avoid;' : '') + '">' +
       '<div style="font-family:' + SERIF + ';font-size:' + (11*sc) + u + ';font-weight:700;' +
            'letter-spacing:' + (0.8*sc) + u + ';color:#111;text-transform:uppercase;">' + label + '</div>' +
       '<div style="height:' + (isPrint ? '1pt' : '1.5px') + ';background:#1F3A93;margin-top:' + (isPrint ? '2pt' : '3px') + ';"></div>' +
@@ -3546,7 +3547,7 @@ function rbRenderTPM(mode) {
       // position:absolute causes the container to report zero height to the print layout engine
       // which renders the role title out of its correct position in the printed PDF.
       // border-left is fully reliable across all print engines (Chrome, Firefox, Edge, Safari).
-      return '<div style="margin-top:' + (2*sc) + u + ';page-break-after:avoid;">' +
+      return '<div style="margin-top:' + (2*sc) + u + ';">' +
         '<div style="border-left:3' + u + ' solid ' + ac + ';background:#EBF4FF;' +
              'padding:' + (3*sc) + u + ' ' + (5*sc) + u + ';' +
              'font-family:' + SERIF + ';font-size:' + (COMP_S*sc) + u + ';font-weight:700;color:#0a0a0a;' +
@@ -3645,17 +3646,22 @@ function rbRenderTPM(mode) {
     ? secHdr('PROFESSIONAL EXPERIENCE') +
       validExp.map((e) => {
         const origIdx = rbState.experience.indexOf(e);
-        const breakAttr = isPrint
-          ? 'break-inside:avoid;page-break-inside:avoid;display:block;'
-          : 'break-inside:avoid;page-break-inside:avoid;display:block;';
+        const entryHeader =
+          '<div style="break-inside:avoid;page-break-inside:avoid;display:block;">' +
+            jobTitleRow(e.role) +
+            companyRow(e.company, e.location, e.start, e.end) +
+            domainRow(e.domain) +
+          '</div>';
+        const entryBuls = e.bullets.filter(b => b.trim());
+        const bulletsHtml = entryBuls.length
+          ? '<div style="padding-left:' + (3*sc) + u + ';margin-top:' + (1*sc) + u + ';">' +
+              entryBuls.map(bul).join('') +
+            '</div>'
+          : '';
         return '<div' + (isPrint ? '' : ' data-exp-idx="' + origIdx + '"') +
-          ' style="' + breakAttr + 'margin-bottom:' + (ENT_MB*sc) + u + ';">' +
-          jobTitleRow(e.role) +
-          companyRow(e.company, e.location, e.start, e.end) +
-          domainRow(e.domain) +
-          '<div style="padding-left:' + (3*sc) + u + ';">' +
-            e.bullets.filter(b => b.trim()).map(bul).join('') +
-          '</div>' +
+          ' style="break-inside:avoid;page-break-inside:avoid;display:block;' +
+          'margin-bottom:' + (ENT_MB*sc) + u + ';">' +
+          entryHeader + bulletsHtml +
           '</div>';
       }).join('')
     : '';
@@ -3702,13 +3708,13 @@ function rbRenderTPM(mode) {
           .filter(s => s.length > 1);
         if (!rawItems.length) return '';
         // Split into rows of max 5 items for readability (60/40 text/whitespace ratio)
-        const ITEMS_PER_ROW = 4;  // 4 per row prevents awkward mid-item line wrapping
+        const ITEMS_PER_ROW = isPrint ? 6 : 5;  // 6 print / 5 screencreen: 4/row readable
         const rows = [];
         for (let i = 0; i < rawItems.length; i += ITEMS_PER_ROW) {
           // Non-breaking spaces around separator prevent mid-item wrapping
           rows.push(rawItems.slice(i, i + ITEMS_PER_ROW).join(' • '));
         }
-        return '<div style="margin-bottom:' + (5*sc) + u + ';' + (isPrint ? 'page-break-inside:avoid;' : '') + '">' +
+        return '<div style="margin-bottom:' + (5*sc) + u + ';break-inside:avoid;page-break-inside:avoid;">' +
           '<div style="font-family:' + SERIF + ';font-size:' + (9*sc) + u + ';font-weight:700;color:#1F3A93;' +
                'margin-bottom:' + (3*sc) + u + ';letter-spacing:0.3' + u + ';">' + E(cat.label) + '</div>' +
           rows.map(row =>
@@ -3734,7 +3740,8 @@ function rbRenderTPM(mode) {
 
   // 5 Certifications
   const certHtml = rbState.certifications.filter(c => c.name).length
-    ? secHdr('CERTIFICATIONS') +
+    ? '<div style="break-inside:avoid;page-break-inside:avoid;display:block;">' +
+      secHdr('CERTIFICATIONS') +
       rbState.certifications.filter(c => c.name).map(c =>
         isPrint
           ? '<div style="display:table;width:100%;margin-bottom:' + (BUL_MB*sc) + u + ';">' +
@@ -3757,7 +3764,8 @@ function rbRenderTPM(mode) {
                 (c.year   ? ' <span style="color:#555;">· ' + E(c.year)   + '</span>' : '') +
               '</span>' +
             '</div>'
-      ).join('')
+      ).join('') +
+      '</div>'
     : '';
 
   // 6 Projects
@@ -4106,77 +4114,67 @@ function rbExportPDF() {
     bodyContent = printHtml;
 
     const baseLH = (1.45 * sc).toFixed(2);
-    // @page margins apply to EVERY page — fixes page 2 starting with zero top clearance.
-    // margin: 12mm top/bottom, 13mm left/right — professional resume margins.
-    // Note: In the Chrome print dialog, uncheck "Headers and footers" for the cleanest PDF.
+    // CRITICAL FIX: @page{margin:0} is the ONLY cross-browser way to suppress
+    // Chrome's date/title/URL headers+footers injected on every page.
+    // Any non-zero @page margin gives Chrome space to inject its content.
+    // Our margins come from body{padding} which flows across all pages uniformly.
     pageCSS =
-      '@page { size: A4; margin: 12mm 13mm 14mm 13mm; }\n' +
-      'html, body { margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }\n' +
+      '@page { size: A4; margin: 0; }\n' +
+      'html { margin: 0; padding: 0; }\n' +
+      'body { margin: 0; padding: ' + (12*sc).toFixed(1) + 'mm ' + (13*sc).toFixed(1) + 'mm; '
+             + 'background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; '
+             + 'line-height: ' + baseLH + '; font-size: 9.5pt; }\n' +
       '* { box-sizing: border-box; word-wrap: break-word; overflow-wrap: break-word; }\n' +
-      'body { line-height: ' + baseLH + '; font-size: 9.5pt; }\n' +
-      '/* break-inside:avoid wrappers must be display:block */\n' +
       'div[style*="break-inside:avoid"] { display: block !important; break-inside: avoid; page-break-inside: avoid; }';
 
   } else {
-    // Non-TPM: extract the raw resume HTML from the measurement div (no page-sheet chrome)
+    // Non-TPM templates
     const tempMeasure = document.getElementById('_rb_temp_measure');
-    bodyContent = tempMeasure ? tempMeasure.innerHTML : (document.getElementById('rb-preview-content')?.innerHTML || '');
-    const basePx = (8.5 * sc).toFixed(1);
-    const lhVal  = (1.5  * sc).toFixed(2);
-    const baseCSS = `@page{size:A4;margin:0} html,body{margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;} *{box-sizing:border-box;word-wrap:break-word;overflow-wrap:break-word;}`;
-    if      (tpl === 'modern')  pageCSS = baseCSS + ` body{font-family:Calibri,"Segoe UI",Arial,sans-serif;font-size:${basePx}px;} .page{width:210mm;min-height:297mm;margin:0 auto;padding:13mm;}`;
-    else if (tpl === 'minimal') pageCSS = baseCSS + ` body{font-family:Calibri,"Helvetica Neue",Arial,sans-serif;font-size:${basePx}px;line-height:${lhVal};} .page{width:210mm;min-height:297mm;margin:0 auto;padding:13mm 16mm;}`;
-    else                        pageCSS = baseCSS + ` body{font-family:Calibri,"Segoe UI",Arial,sans-serif;font-size:${basePx}px;line-height:${lhVal};} .page{width:210mm;min-height:297mm;margin:0 auto;padding:13mm 14mm;}`;
-    bodyContent = `<div class="page">${bodyContent}</div>`;
+    bodyContent = tempMeasure ? tempMeasure.innerHTML : '';
+    const bPx  = (8.5 * sc).toFixed(1);
+    const lh   = (1.45 * sc).toFixed(2);
+    pageCSS = '@page{size:A4;margin:0}html,body{margin:0;background:white;-webkit-print-color-adjust:exact;print-color-adjust:exact}*{box-sizing:border-box;word-wrap:break-word;overflow-wrap:break-word}body{font-size:' + bPx + 'px;line-height:' + lh + ';padding:12mm 13mm}';
   }
 
-  const fullHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>${rbE(p.name||'Resume')} — Resume</title>
-<style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-${pageCSS}
-</style>
-</head>
-<body>
-${bodyContent}
-</body>
-</html>`;
+  // ── BUILD & OPEN PRINT WINDOW ─────────────────────────────────
+  // Title = NBSP: Chrome prints nothing in header (blank > "name — Resume").
+  // @page { margin:0 } suppresses Chrome date/URL/page-num injection.
+  // Content margins live on body { padding: 12mm 13mm }.
+  const printName = (p.name || 'Resume').replace(/\s+/g, '_');
+  const printDoc =
+    '<!DOCTYPE html>\n<html lang="en">\n<head>\n' +
+    '<meta charset="UTF-8">\n' +
+    '<title>\u00a0</title>\n' +
+    '<style>\n' + pageCSS + '\n</style>\n' +
+    '</head>\n<body>\n' +
+    bodyContent +
+    '\n</body>\n</html>';
 
-  const blob = new Blob([fullHtml], { type: 'text/html' });
+  const blob = new Blob([printDoc], { type: 'text/html; charset=utf-8' });
   const url  = URL.createObjectURL(blob);
   const win  = window.open(url, '_blank');
+
   if (!win) {
-    // Popup blocked — download as HTML and guide the user
     const a = document.createElement('a');
-    a.href = url;
-    a.download = `${(p.name||'Resume').replace(/\s+/g,'_')}_Resume.html`;
+    a.href = url; a.download = printName + '_Resume.html';
     a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 3000);
-    showToast('HTML file downloaded — open it in your browser and press Ctrl+P (Cmd+P on Mac) → Save as PDF', false);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    showToast(
+      'File downloaded. Open in Chrome \u2192 Ctrl+P \u2192 Save as PDF \u2192 More settings \u2192 uncheck Headers and footers',
+      false
+    );
   } else {
-    // Auto-trigger print dialog in new tab
-    win.onload = () => {
-      win.focus();
-      setTimeout(() => {
-        win.print();
-        setTimeout(() => { URL.revokeObjectURL(url); }, 2000);
-      }, 600);
-    };
-    // Fallback if onload already fired
-    setTimeout(() => {
-      try { win.focus(); win.print(); } catch(e) {}
-    }, 1200);
-    showToast('Print dialog opened → choose "Save as PDF". Tip: uncheck "Headers and footers" in More settings for a clean PDF.', false);
+    const cleanup = () => setTimeout(() => URL.revokeObjectURL(url), 3000);
+    win.onload = () => { win.focus(); setTimeout(() => { win.print(); cleanup(); }, 500); };
+    setTimeout(() => { try { win.focus(); win.print(); } catch(e) {} cleanup(); }, 1500);
+    showToast(
+      '\u2713 Print dialog opened  \u2503  Destination: Save as PDF  \u2503  More settings \u2192 uncheck Headers and footers',
+      false
+    );
   }
 }
 
-// ── UTILS ──────────────────────────────────────────────────
-function rbVal(id)    { return document.getElementById(id)?.value?.trim()||''; }
-function rbById(id)   { return document.getElementById(id); }
-function rbEsc(s)     { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function rbE(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 
 // ── FULL RESET — called by "Upload New Resume" ────────────────
