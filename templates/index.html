@@ -3495,8 +3495,8 @@ function rbRenderTPM(mode) {
   // Spacing (all readable values)
   const SEC_MT  = isPrint ? 10 : 12;  // section margin-top (print tighter for 2-page fit)
   const SEC_MB  = isPrint ? 4  : 5;   // section header bottom margin
-  const ENT_MB  = isPrint ? 7  : 9;   // between experience entries
-  const BUL_MB  = isPrint ? 3  : 4;   // between bullets
+  const ENT_MB  = isPrint ? 7  : 12;  // between experience entries (14px effective with padding)
+  const BUL_MB  = isPrint ? 3  : 5;   // between bullets (5px screen, 3pt print)
   const BUL_LH  = 1.45;              // bullet line height
   const PAD_H   = isPrint ? '14mm' : '50px';  // horizontal padding
   const PAD_V   = isPrint ? '13mm' : '46px';  // vertical padding
@@ -3581,7 +3581,7 @@ function rbRenderTPM(mode) {
              'word-wrap:break-word;">' + E(co) + '</div>' +
         (dates ? '<div style="display:table-cell;font-family:' + SANS + ';font-size:' + (SUB_S*sc) + u + ';' +
                  'color:#444;white-space:nowrap;text-align:right;vertical-align:middle;' +
-                 'padding:' + (2.5*sc) + u + ' ' + (4*sc) + u + ';width:1px;">' + E(dates) + '</div>' : '') +
+                 'padding:' + (2.5*sc) + u + ' ' + (4*sc) + u + ' ' + (2.5*sc) + u + ' ' + (10*sc) + u + ';width:1px;">' + E(dates) + '</div>' : '') +
       '</div>';
     }
     // Screen mode: flex layout (works perfectly on screen)
@@ -3672,7 +3672,7 @@ function rbRenderTPM(mode) {
           // Print: table layout ensures year never merges with institution name
           ? '<div style="display:table;width:100%;page-break-inside:avoid;">' +
               '<div style="display:table-cell;font-family:' + SERIF + ';font-size:' + (COMP_S*sc) + u + ';font-weight:700;color:#111;word-wrap:break-word;">' + E(e.institution) + '</div>' +
-              (yr ? '<div style="display:table-cell;font-family:' + SANS + ';font-size:' + (SUB_S*sc) + u + ';color:#444;white-space:nowrap;text-align:right;vertical-align:baseline;width:1px;">' + E(yr) + '</div>' : '') +
+              (yr ? '<div style="display:table-cell;font-family:' + SANS + ';font-size:' + (SUB_S*sc) + u + ';color:#444;white-space:nowrap;text-align:right;vertical-align:baseline;width:1px;padding-left:' + (8*sc) + u + ';">' + E(yr) + '</div>' : '') +
             '</div>'
           // Screen: flex layout
           : '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:' + (6*sc) + u + ';">' +
@@ -3702,10 +3702,11 @@ function rbRenderTPM(mode) {
           .filter(s => s.length > 1);
         if (!rawItems.length) return '';
         // Split into rows of max 5 items for readability (60/40 text/whitespace ratio)
-        const ITEMS_PER_ROW = 5;
+        const ITEMS_PER_ROW = 4;  // 4 per row prevents awkward mid-item line wrapping
         const rows = [];
         for (let i = 0; i < rawItems.length; i += ITEMS_PER_ROW) {
-          rows.push(rawItems.slice(i, i + ITEMS_PER_ROW).join('  •  '));
+          // Non-breaking spaces around separator prevent mid-item wrapping
+          rows.push(rawItems.slice(i, i + ITEMS_PER_ROW).join(' • '));
         }
         return '<div style="margin-bottom:' + (5*sc) + u + ';' + (isPrint ? 'page-break-inside:avoid;' : '') + '">' +
           '<div style="font-family:' + SERIF + ';font-size:' + (9*sc) + u + ';font-weight:700;color:#1F3A93;' +
@@ -3834,8 +3835,10 @@ function rbRenderTPM(mode) {
   const bodyFont = (RB_FONTS[rbState.font] || RB_FONTS.arial).css;
   // Margins: print = 13mm sides, 12mm top/bottom (professional resume margins)
   //          screen = 48px sides (≈12.7mm), 38px top/bottom for visual match
-  const padH  = isPrint ? '13mm' : '48px';
-  const padV  = isPrint ? '12mm' : '38px';
+  // Print: @page CSS handles all margins — root container has zero padding
+  // Screen: keep comfortable preview padding
+  const padH  = isPrint ? '0'    : '48px';
+  const padV  = isPrint ? '0'    : '38px';
   const minH  = isPrint ? '297mm' : '100%';
 
   return '<div style="' +
@@ -4103,13 +4106,15 @@ function rbExportPDF() {
     bodyContent = printHtml;
 
     const baseLH = (1.45 * sc).toFixed(2);
+    // @page margins apply to EVERY page — fixes page 2 starting with zero top clearance.
+    // margin: 12mm top/bottom, 13mm left/right — professional resume margins.
+    // Note: In the Chrome print dialog, uncheck "Headers and footers" for the cleanest PDF.
     pageCSS =
-      '/* @page margin:0 eliminates browser URL/date/page headers & footers */\n' +
-      '@page { size: A4; margin: 0; }\n' +
+      '@page { size: A4; margin: 12mm 13mm 14mm 13mm; }\n' +
       'html, body { margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }\n' +
       '* { box-sizing: border-box; word-wrap: break-word; overflow-wrap: break-word; }\n' +
       'body { line-height: ' + baseLH + '; font-size: 9.5pt; }\n' +
-      '/* Only break-inside:avoid entry wrappers need display:block enforcement */\n' +
+      '/* break-inside:avoid wrappers must be display:block */\n' +
       'div[style*="break-inside:avoid"] { display: block !important; break-inside: avoid; page-break-inside: avoid; }';
 
   } else {
@@ -4164,7 +4169,7 @@ ${bodyContent}
     setTimeout(() => {
       try { win.focus(); win.print(); } catch(e) {}
     }, 1200);
-    showToast('Print dialog opened — choose "Save as PDF" in your printer options', false);
+    showToast('Print dialog opened → choose "Save as PDF". Tip: uncheck "Headers and footers" in More settings for a clean PDF.', false);
   }
 }
 
