@@ -3396,11 +3396,11 @@ function rbRenderTPM(mode) {
   const LINK_S = isPrint ? 8.5 : 8.5;   // contact line 2
 
   // Spacing (all readable values)
-  const SEC_MT  = isPrint ? 10 : 10;   // section margin-top
-  const SEC_MB  = isPrint ? 4  : 4;    // section header margin-bottom
-  const ENT_MB  = isPrint ? 6  : 6;    // between experience entries
-  const BUL_MB  = isPrint ? 2  : 2;    // between bullets
-  const BUL_LH  = 1.45;               // bullet line height
+  const SEC_MT  = isPrint ? 14 : 14;  // section margin-top
+  const SEC_MB  = isPrint ? 6  : 6;   // section header bottom margin
+  const ENT_MB  = isPrint ? 10 : 10;  // between experience entries
+  const BUL_MB  = isPrint ? 5  : 5;   // between bullets — key readability value
+  const BUL_LH  = 1.5;               // bullet line height
   const PAD_H   = isPrint ? '14mm' : '50px';  // horizontal padding
   const PAD_V   = isPrint ? '13mm' : '46px';  // vertical padding
 
@@ -3437,15 +3437,16 @@ function rbRenderTPM(mode) {
   // ── SECTION HEADER ────────────────────────────────────────
   const secHdr = (label) =>
     '<div style="margin-top:' + (SEC_MT*sc) + u + ';margin-bottom:' + (SEC_MB*sc) + u + ';' + (isPrint ? 'page-break-after:avoid;' : '') + '">' +
-      '<div style="font-family:' + SERIF + ';font-size:' + (SHDR_S*sc) + u + ';font-weight:700;letter-spacing:0.5' + u + ';color:#111;text-transform:uppercase;">' + label + '</div>' +
-      '<div style="height:' + (isPrint ? '0.75pt' : '1px') + ';background:#111;margin-top:' + (isPrint ? '1.5pt' : '2px') + ';"></div>' +
+      '<div style="font-family:' + SERIF + ';font-size:' + (11*sc) + u + ';font-weight:700;' +
+           'letter-spacing:' + (0.8*sc) + u + ';color:#111;text-transform:uppercase;">' + label + '</div>' +
+      '<div style="height:' + (isPrint ? '1pt' : '1.5px') + ';background:#1F3A93;margin-top:' + (isPrint ? '2pt' : '3px') + ';"></div>' +
     '</div>';
 
   // ── EXPERIENCE ROW HELPERS ───────────────────────────────
   const jobTitleRow = (title) =>
-    '<div style="position:relative;margin-top:' + (5*sc) + u + ';padding-left:' + (6*sc) + u + ';' + (isPrint ? 'page-break-after:avoid;' : '') + '">' +
+    '<div style="position:relative;margin-top:' + (2*sc) + u + ';padding-left:' + (6*sc) + u + ';' + (isPrint ? 'page-break-after:avoid;' : '') + '">' +
       '<div style="position:absolute;left:0;top:0;bottom:0;width:' + (isPrint ? '3pt' : '3px') + ';background:' + ac + ';"></div>' +
-      '<div style="background:#EBF4FF;padding:' + (2*sc) + u + ' ' + (6*sc) + u + ';' +
+      '<div style="background:#EBF4FF;padding:' + (3*sc) + u + ' ' + (6*sc) + u + ';' +
            'font-family:' + SERIF + ';font-size:' + (COMP_S*sc) + u + ';font-weight:700;color:#0a0a0a;' +
            'word-wrap:break-word;overflow-wrap:break-word;">' +
         E(title) +
@@ -3455,33 +3456,47 @@ function rbRenderTPM(mode) {
   const companyRow = (company, location, start, end) => {
     const dates = [start, end].filter(Boolean).join(' – ');
     const co    = [company, location].filter(Boolean).join(', ');
-    return '<div style="background:#EAEAEA;padding:' + (2*sc) + u + ' ' + (6*sc) + u + ';' +
-                 'margin-bottom:' + (3*sc) + u + ';overflow:hidden;word-wrap:break-word;">' +
-      '<span style="font-family:' + SERIF + ';font-size:' + (COMP_S*sc) + u + ';font-weight:700;color:#111;">' + E(co) + '</span>' +
-      (dates ? '<span style="float:right;font-family:' + SANS + ';font-size:' + (SUB_S*sc) + u + ';color:#333;white-space:nowrap;margin-left:' + (4*sc) + u + ';">' + E(dates) + '</span>' : '') +
+    // CRITICAL: use flex not float:right — float escapes break-inside:avoid in print mode
+    // causing dates to appear at top of next page separated from their entry
+    return '<div style="background:#EAEAEA;padding:' + (2.5*sc) + u + ' ' + (6*sc) + u + ';' +
+                 'margin-bottom:' + (3*sc) + u + ';' +
+                 'display:flex;justify-content:space-between;align-items:center;' +
+                 'word-wrap:break-word;gap:' + (6*sc) + u + ';">' +
+      '<span style="font-family:' + SERIF + ';font-size:' + (COMP_S*sc) + u + ';font-weight:700;color:#111;' +
+            'word-wrap:break-word;flex:1;">' + E(co) + '</span>' +
+      (dates ? '<span style="font-family:' + SANS + ';font-size:' + (SUB_S*sc) + u + ';color:#444;' +
+               'white-space:nowrap;flex-shrink:0;">' + E(dates) + '</span>' : '') +
     '</div>';
   };
 
   const domainRow = (domain) => domain
-    ? '<div style="font-family:' + SERIF + ';font-style:italic;font-size:' + (SUB_S*sc) + u + ';color:#444;' +
-           'margin-bottom:' + (3*sc) + u + ';padding-left:' + (5*sc) + u + ';">' + E(domain) + '</div>'
+    ? '<div style="font-family:' + SERIF + ';font-style:italic;font-size:' + (SUB_S*sc) + u + ';color:#555;' +
+           'margin-bottom:' + (4*sc) + u + ';padding-left:' + (6*sc) + u + ';' +
+           'line-height:' + BUL_LH + ';letter-spacing:0.2' + u + ';">' + E(domain) + '</div>'
     : '';
 
   const bul = (text) => {
     const ct = text.replace(/^[•\-\*\u25b8\s]+/, '').trim();
     if (!ct) return '';
-    return '<div style="display:flex;gap:' + (4*sc) + u + ';margin-bottom:' + (BUL_MB*sc) + u + ';' +
-                 'padding-left:' + (2*sc) + u + ';' + (isPrint ? 'page-break-inside:avoid;' : '') + '">' +
-      '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';flex-shrink:0;color:#111;line-height:' + BUL_LH + ';">•</span>' +
+    // Use "• " with a real space so ATS text extraction sees "• text" not "•text"
+    return '<div style="display:flex;gap:' + (3*sc) + u + ';margin-bottom:' + (BUL_MB*sc) + u + ';' +
+                 'padding-left:' + (3*sc) + u + ';' + (isPrint ? 'page-break-inside:avoid;' : '') + '">' +
+      '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';flex-shrink:0;' +
+            'color:#111;line-height:' + BUL_LH + ';padding-right:' + (2*sc) + u + ';">•</span>' +
       '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';color:#111;line-height:' + BUL_LH + ';' +
-            'word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;">' + E(ct) + '</span>' +
+            'word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;flex:1;">' + E(ct) + '</span>' +
     '</div>';
   };
 
   // ── SECTIONS — correct order per spec ──────────────────────
   // 1 Summary
   const sumBuls = rbState.summary.filter(b => b.trim());
-  const summaryHtml = sumBuls.length ? secHdr('SUMMARY') + sumBuls.map(bul).join('') : '';
+  const summaryHtml = sumBuls.length
+    ? secHdr('SUMMARY') +
+      '<div style="margin-bottom:' + (4*sc) + u + ';">' +
+        sumBuls.map(bul).join('') +
+      '</div>'
+    : '';
 
   // 2 Experience
   const validExp = rbState.experience.filter(e => e.role);
@@ -3497,7 +3512,9 @@ function rbRenderTPM(mode) {
           jobTitleRow(e.role) +
           companyRow(e.company, e.location, e.start, e.end) +
           domainRow(e.domain) +
-          e.bullets.filter(b => b.trim()).map(bul).join('') +
+          '<div style="padding-left:' + (3*sc) + u + ';">' +
+            e.bullets.filter(b => b.trim()).map(bul).join('') +
+          '</div>' +
           '</div>';
       }).join('')
     : '';
@@ -3510,12 +3527,12 @@ function rbRenderTPM(mode) {
         const yr       = e.end || e.year || '';
         const degField = [e.degree, e.field].filter(Boolean).join(' – ');
         const gpaStr   = e.gpa ? ' · GPA ' + E(e.gpa) : '';
-        return '<div style="margin-bottom:' + (4*sc) + u + ';' + (isPrint ? 'page-break-inside:avoid;' : '') + '">' +
-          '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:' + (4*sc) + u + ';">' +
-            '<span style="font-family:' + SERIF + ';font-size:' + (COMP_S*sc) + u + ';font-weight:700;color:#111;word-wrap:break-word;">' + E(e.institution) + '</span>' +
-            '<span style="font-family:' + SANS + ';font-size:' + (SUB_S*sc) + u + ';color:#333;white-space:nowrap;flex-shrink:0;">' + E(yr) + '</span>' +
+        return '<div style="margin-bottom:' + (6*sc) + u + ';' + (isPrint ? 'page-break-inside:avoid;' : '') + '">' +
+          '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:' + (6*sc) + u + ';">' +
+            '<span style="font-family:' + SERIF + ';font-size:' + (COMP_S*sc) + u + ';font-weight:700;color:#111;word-wrap:break-word;flex:1;">' + E(e.institution) + '</span>' +
+            '<span style="font-family:' + SANS + ';font-size:' + (SUB_S*sc) + u + ';color:#444;white-space:nowrap;flex-shrink:0;">' + E(yr) + '</span>' +
           '</div>' +
-          (degField ? '<div style="font-family:' + SERIF + ';font-style:italic;font-size:' + (SUB_S*sc) + u + ';color:#333;margin-top:1' + u + ';">' + E(degField) + gpaStr + '</div>' : '') +
+          (degField ? '<div style="font-family:' + SERIF + ';font-style:italic;font-size:' + (SUB_S*sc) + u + ';color:#444;margin-top:' + (2*sc) + u + ';line-height:' + BUL_LH + ';">' + E(degField) + gpaStr + '</div>' : '') +
         '</div>';
       }).join('')
     : '';
@@ -3534,13 +3551,24 @@ function rbRenderTPM(mode) {
           .map(s => s.trim().replace(/^[•\-\*\s]+/, '').replace(/\)+$/, '').replace(/\.$/, '').trim())
           .filter(s => s.length > 1);
         if (!rawItems.length) return '';
-        const itemsStr = rawItems.join(' • ');
-        return '<div style="display:flex;gap:' + (4*sc) + u + ';margin-bottom:' + (2.5*sc) + u + ';' +
-                     'padding-left:' + (2*sc) + u + ';' + (isPrint ? 'page-break-inside:avoid;' : '') + '">' +
-          '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';flex-shrink:0;color:#111;line-height:' + BUL_LH + ';">•</span>' +
-          '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';color:#111;line-height:' + BUL_LH + ';word-wrap:break-word;">' +
-            '<strong>' + E(cat.label) + ':</strong> ' + E(itemsStr) +
-          '</span>' +
+        // Split into rows of max 5 items for readability (60/40 text/whitespace ratio)
+        const ITEMS_PER_ROW = 5;
+        const rows = [];
+        for (let i = 0; i < rawItems.length; i += ITEMS_PER_ROW) {
+          rows.push(rawItems.slice(i, i + ITEMS_PER_ROW).join('  •  '));
+        }
+        return '<div style="margin-bottom:' + (5*sc) + u + ';' + (isPrint ? 'page-break-inside:avoid;' : '') + '">' +
+          '<div style="font-family:' + SERIF + ';font-size:' + (9*sc) + u + ';font-weight:700;color:#1F3A93;' +
+               'margin-bottom:' + (3*sc) + u + ';letter-spacing:0.3' + u + ';">' + E(cat.label) + '</div>' +
+          rows.map(row =>
+            '<div style="display:flex;gap:' + (3*sc) + u + ';margin-bottom:' + (3*sc) + u + ';' +
+                 'padding-left:' + (3*sc) + u + ';">' +
+              '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';flex-shrink:0;' +
+                    'color:#1F3A93;line-height:' + BUL_LH + ';padding-right:' + (2*sc) + u + ';">•</span>' +
+              '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';color:#111;' +
+                    'line-height:' + BUL_LH + ';word-wrap:break-word;flex:1;">' + E(row) + '</span>' +
+            '</div>'
+          ).join('') +
         '</div>';
       }).join('')
     : '';
@@ -3549,12 +3577,13 @@ function rbRenderTPM(mode) {
   const certHtml = rbState.certifications.filter(c => c.name).length
     ? secHdr('CERTIFICATIONS') +
       rbState.certifications.filter(c => c.name).map(c =>
-        '<div style="display:flex;gap:' + (4*sc) + u + ';margin-bottom:' + (2.5*sc) + u + ';padding-left:' + (2*sc) + u + ';">' +
-          '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';flex-shrink:0;color:#111;line-height:' + BUL_LH + ';">•</span>' +
+        '<div style="display:flex;gap:' + (3*sc) + u + ';margin-bottom:' + (BUL_MB*sc) + u + ';padding-left:' + (3*sc) + u + ';">' +
+          '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';flex-shrink:0;color:#1F3A93;' +
+               'line-height:' + BUL_LH + ';padding-right:' + (2*sc) + u + ';">•</span>' +
           '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';color:#111;line-height:' + BUL_LH + ';">' +
             '<strong>' + E(c.name) + '</strong>' +
-            (c.issuer ? ' · ' + E(c.issuer) : '') +
-            (c.year   ? ' · ' + E(c.year)   : '') +
+            (c.issuer ? ' <span style="color:#555;">· ' + E(c.issuer) + '</span>' : '') +
+            (c.year   ? ' <span style="color:#555;">· ' + E(c.year)   + '</span>' : '') +
           '</span>' +
         '</div>'
       ).join('')
@@ -3633,13 +3662,16 @@ function rbRenderTPM(mode) {
 
   // ── ASSEMBLE ──────────────────────────────────────────────
   const bodyFont = (RB_FONTS[rbState.font] || RB_FONTS.arial).css;
-  const padH  = isPrint ? '13mm' : '50px';
-  const padV  = isPrint ? '14mm' : '46px';
+  // Margins: print = 13mm sides, 12mm top/bottom (professional resume margins)
+  //          screen = 48px sides (≈12.7mm), 38px top/bottom for visual match
+  const padH  = isPrint ? '13mm' : '48px';
+  const padV  = isPrint ? '12mm' : '38px';
   const minH  = isPrint ? '297mm' : '100%';
 
   return '<div style="' +
     'font-family:' + bodyFont + ';' +
     'font-size:' + (BASE*sc) + u + ';' +
+    'line-height:' + BUL_LH + ';' +
     'color:#111;background:white;' +
     'padding:' + padV + ' ' + padH + ';' +
     'min-height:' + minH + ';' +
@@ -3652,7 +3684,7 @@ function rbRenderTPM(mode) {
            'letter-spacing:1' + u + ';color:#0a0a0a;line-height:1.1;margin-bottom:' + (2*sc) + u + ';">' +
         E(_rbNormalizeName(p.name) || 'YOUR NAME') +
       '</div>' +
-      (p.title ? '<div style="font-family:' + SERIF + ';font-size:' + (TITL_S*sc) + u + ';font-weight:700;color:#222;margin-bottom:' + (3*sc) + u + ';">' + E(p.title) + '</div>' : '') +
+      (p.title ? '<div style="font-family:' + SERIF + ';font-size:' + (TITL_S*sc) + u + ';font-weight:400;color:#444;margin-bottom:' + (4*sc) + u + ';letter-spacing:0.3' + u + ';">' + E(p.title) + '</div>' : '') +
       contactBlock +
     '</div>' +
     // Sections in correct order
@@ -3900,13 +3932,18 @@ function rbExportPDF() {
     const printHtml = rbRenderTPM('print');
     bodyContent = printHtml;
 
+    const baseLH = (1.5 * sc).toFixed(2);
     pageCSS =
       '/* @page margin:0 eliminates browser URL/date/page headers & footers */\n' +
       '@page { size: A4; margin: 0; }\n' +
       'html, body { margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }\n' +
       '* { box-sizing: border-box; word-wrap: break-word; overflow-wrap: break-word; }\n' +
+      'body { line-height: ' + baseLH + '; }\n' +
       '/* block elements with break-inside:avoid must be display:block */\n' +
-      'div[style*="break-inside:avoid"] { display: block !important; break-inside: avoid; page-break-inside: avoid; }';
+      'div[style*="break-inside:avoid"] { display: block !important; break-inside: avoid; page-break-inside: avoid; }\n' +
+      '/* Prevent flex items from being torn apart across page breaks */\n' +
+      'div[style*="display:flex"] { display: block !important; }\n' +
+      'div[style*="display: flex"] { display: block !important; }';
 
   } else {
     // Non-TPM: extract the raw resume HTML from the measurement div (no page-sheet chrome)
