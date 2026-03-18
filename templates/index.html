@@ -550,6 +550,8 @@
     .rb-preview-pane { position:sticky; top:0; background:var(--surface-2); border-radius:var(--radius); overflow:hidden; box-shadow:0 8px 40px rgba(0,0,0,.4); }
     .rb-preview-toolbar { background:var(--surface-2); border-bottom:1px solid var(--border); padding:10px 14px; display:flex; align-items:center; justify-content:space-between; }
     .rb-preview-scroll { max-height:80vh; overflow-y:auto; background:#2d3748; padding:12px 8px; }
+    /* Scale A4 pages to fit the preview column without horizontal scroll */
+    .rb-page-sheet { transform-origin: top center; }
     .rb-preview-scroll::-webkit-scrollbar { width:5px; }
     .rb-preview-scroll::-webkit-scrollbar-thumb { background:#666; border-radius:3px; }
 
@@ -596,15 +598,23 @@
     .rb-preview-toggle.active { background: rgba(0,212,255,.18); box-shadow: 0 0 12px rgba(0,212,255,.2); }
 
     /* Each A4 page rendered as a white sheet with shadow */
+    /* Auto-scales to fit preview column — A4 = 794px, column ≈ 100% of preview pane */
     .rb-page-sheet {
       background: white;
-      width: 100%;
-      aspect-ratio: 210 / 297;
-      margin: 0 auto 10px auto;
+      width: 794px;
+      min-height: 1123px;
+      margin: 0 auto 12px auto;
       box-shadow: 0 2px 16px rgba(0,0,0,.5);
       border-radius: 2px;
       overflow: hidden;
       position: relative;
+      transform-origin: top center;
+    }
+    /* Scale down to fit the preview scroll area (max ~420px wide) */
+    #rb-preview-scroll .rb-page-sheet,
+    #rb-float-scroll .rb-page-sheet {
+      transform: scale(0.52);
+      margin-bottom: calc((1123px * 0.52) - 1123px + 12px);
     }
     .rb-page-sheet:last-child { margin-bottom: 0; }
     .rb-page-label {
@@ -3362,40 +3372,82 @@ function rbE(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
 // Job-title row: #EBF4FF bg + 3px #1F3A93 left accent bar
 // Company row: #EAEAEA bg, bold company left, dates right
 // Domain tag: Georgia Italic 10pt
-function rbRenderTPM() {
+function rbRenderTPM(mode) {
+  // mode: 'screen' (preview, px units) | 'print' (export, pt units)
+  // Single rendering function for both — export wraps in print CSS only
+  const isPrint = (mode === 'print');
+  const u = isPrint ? 'pt' : 'px';   // unit suffix
   const p  = rbState.personal;
   const sk = rbState.skills;
   const sc = RB_SPACING[rbState.spacing] || 1;
   const ac = rbState.accent || '#1F3A93';
   const E  = rbE;
 
-  // Contact: line 1 = location | email | phone  /  line 2 = linkedin | portfolio
-  // Skip raw placeholder values like "LinkedIn", "GitHub", "N/A" etc.
-  const _isPH = (v) => !v || /^(linkedin|github|n\/a|your[- ]|http$|www$|link$|github$|portfolio$|website$)/i.test(v.trim());
-  const cLine1 = [
-    p.location && '<span>📍 ' + E(p.location) + '</span>',
-    p.email    && '<span>✉ '  + E(p.email)    + '</span>',
-    p.phone    && '<span>✆ '  + E(p.phone)    + '</span>',
-  ].filter(Boolean).join('<span style="margin:0 6px;color:#888;"> || </span>');
-  const cLine2 = [
-    !_isPH(p.linkedin)  && '<span>🔗 ' + E(p.linkedin)  + '</span>',
-    !_isPH(p.portfolio) && '<span>🔗 ' + E(p.portfolio) + '</span>',
-    !_isPH(p.website)   && '<span>🌐 ' + E(p.website)   + '</span>',
-  ].filter(Boolean).join('<span style="margin:0 6px;color:#888;"> || </span>');
-  const contactBlock =
-    (cLine1 ? '<div style="font-family:Arial,sans-serif;font-size:' + (9.5*sc) + 'px;color:#333;line-height:1.55;">' + cLine1 + '</div>' : '') +
-    (cLine2 ? '<div style="font-family:Arial,sans-serif;font-size:' + (9.5*sc) + 'px;color:#333;line-height:1.55;">' + cLine2 + '</div>' : '');
+  // ── DESIGN TOKENS ─────────────────────────────────────────
+  // All values in abstract units, multiplied by sc (spacing scale)
+  // pt/px chosen based on mode. Adjusted for better readability.
+  const BASE   = isPrint ? 9.5 : 9.5;   // body font size
+  const NAME_S = isPrint ? 20  : 20;    // name
+  const TITL_S = isPrint ? 11  : 11;    // job title under name
+  const SHDR_S = isPrint ? 10  : 10;    // section header
+  const COMP_S = isPrint ? 9.5 : 9.5;   // company/role
+  const BUL_S  = isPrint ? 9.5 : 9.5;   // bullet text
+  const SUB_S  = isPrint ? 9   : 9;     // sub-text (dates, domain)
+  const LINK_S = isPrint ? 8.5 : 8.5;   // contact line 2
 
+  // Spacing (all readable values)
+  const SEC_MT  = isPrint ? 10 : 10;   // section margin-top
+  const SEC_MB  = isPrint ? 4  : 4;    // section header margin-bottom
+  const ENT_MB  = isPrint ? 6  : 6;    // between experience entries
+  const BUL_MB  = isPrint ? 2  : 2;    // between bullets
+  const BUL_LH  = 1.45;               // bullet line height
+  const PAD_H   = isPrint ? '14mm' : '50px';  // horizontal padding
+  const PAD_V   = isPrint ? '13mm' : '46px';  // vertical padding
+
+  // Font families
+  const SERIF  = "Georgia,'Times New Roman',serif";
+  const SANS   = "Arial,'Helvetica Neue',sans-serif";
+  const fontCss = (RB_FONTS[rbState.font] || RB_FONTS.arial).css;
+
+  // ── CONTACT BLOCK ─────────────────────────────────────────
+  const _isPH = (v) => !v || /^(linkedin|github|n\/a|your[- ]|http$|www$|link$|github$|portfolio$|website$)/i.test(v.trim());
+  const _clean = (v) => E((v || '').replace(/^https?:\/\/(www\.)?/, ''));
+
+  // Preview keeps icons for visual richness; print is ATS-clean
+  const sep = isPrint
+    ? '<span style="margin:0 5' + u + ';color:#aaa;">|</span>'
+    : '<span style="margin:0 5px;color:#888;"> | </span>';
+
+  const cLine1 = [
+    p.location && (isPrint ? E(p.location) : '📍 ' + E(p.location)),
+    p.email    && (isPrint ? E(p.email)    : '✉ '  + E(p.email)),
+    p.phone    && (isPrint ? E(p.phone)    : '✆ '  + E(p.phone)),
+  ].filter(Boolean).join(sep);
+
+  const cLine2 = [
+    !_isPH(p.linkedin)  && (isPrint ? _clean(p.linkedin)  : '🔗 ' + E(p.linkedin)),
+    !_isPH(p.portfolio) && (isPrint ? _clean(p.portfolio) : '🔗 ' + E(p.portfolio)),
+    !_isPH(p.website)   && (isPrint ? _clean(p.website)   : '🌐 ' + E(p.website)),
+  ].filter(Boolean).join(sep);
+
+  const contactBlock =
+    (cLine1 ? '<div style="font-family:' + SANS + ';font-size:' + (BASE*sc) + u + ';color:#333;line-height:1.6;margin-bottom:1' + u + ';">' + cLine1 + '</div>' : '') +
+    (cLine2 ? '<div style="font-family:' + SANS + ';font-size:' + (LINK_S*sc) + u + ';color:#444;line-height:1.6;">' + cLine2 + '</div>' : '');
+
+  // ── SECTION HEADER ────────────────────────────────────────
   const secHdr = (label) =>
-    '<div style="margin-top:' + (9*sc) + 'px;margin-bottom:' + (3*sc) + 'px;">' +
-      '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:' + (10*sc) + 'px;font-weight:700;letter-spacing:0.5px;color:#111;">' + label + '</div>' +
-      '<div style="height:0.75px;background:#111;margin-top:1.5px;"></div>' +
+    '<div style="margin-top:' + (SEC_MT*sc) + u + ';margin-bottom:' + (SEC_MB*sc) + u + ';' + (isPrint ? 'page-break-after:avoid;' : '') + '">' +
+      '<div style="font-family:' + SERIF + ';font-size:' + (SHDR_S*sc) + u + ';font-weight:700;letter-spacing:0.5' + u + ';color:#111;text-transform:uppercase;">' + label + '</div>' +
+      '<div style="height:' + (isPrint ? '0.75pt' : '1px') + ';background:#111;margin-top:' + (isPrint ? '1.5pt' : '2px') + ';"></div>' +
     '</div>';
 
+  // ── EXPERIENCE ROW HELPERS ───────────────────────────────
   const jobTitleRow = (title) =>
-    '<div style="position:relative;margin-top:' + (5*sc) + 'px;padding-left:' + (6*sc) + 'px;">' +
-      '<div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:' + ac + ';"></div>' +
-      '<div style="background:#EBF4FF;padding:' + (2*sc) + 'px ' + (6*sc) + 'px;font-family:Georgia,\'Times New Roman\',serif;font-size:' + (9.5*sc) + 'px;font-weight:700;color:#0a0a0a;">' +
+    '<div style="position:relative;margin-top:' + (5*sc) + u + ';padding-left:' + (6*sc) + u + ';' + (isPrint ? 'page-break-after:avoid;' : '') + '">' +
+      '<div style="position:absolute;left:0;top:0;bottom:0;width:' + (isPrint ? '3pt' : '3px') + ';background:' + ac + ';"></div>' +
+      '<div style="background:#EBF4FF;padding:' + (2*sc) + u + ' ' + (6*sc) + u + ';' +
+           'font-family:' + SERIF + ';font-size:' + (COMP_S*sc) + u + ';font-weight:700;color:#0a0a0a;' +
+           'word-wrap:break-word;overflow-wrap:break-word;">' +
         E(title) +
       '</div>' +
     '</div>';
@@ -3403,38 +3455,45 @@ function rbRenderTPM() {
   const companyRow = (company, location, start, end) => {
     const dates = [start, end].filter(Boolean).join(' – ');
     const co    = [company, location].filter(Boolean).join(', ');
-    return '<div style="background:#EAEAEA;padding:' + (2*sc) + 'px ' + (6*sc) + 'px;margin-bottom:' + (3*sc) + 'px;overflow:hidden;">' +
-      '<span style="font-family:Georgia,\'Times New Roman\',serif;font-size:' + (9.5*sc) + 'px;font-weight:700;color:#111;">' + E(co) + '</span>' +
-      (dates ? '<span style="float:right;font-family:Arial,sans-serif;font-size:' + (9*sc) + 'px;color:#333;">' + E(dates) + '</span>' : '') +
+    return '<div style="background:#EAEAEA;padding:' + (2*sc) + u + ' ' + (6*sc) + u + ';' +
+                 'margin-bottom:' + (3*sc) + u + ';overflow:hidden;word-wrap:break-word;">' +
+      '<span style="font-family:' + SERIF + ';font-size:' + (COMP_S*sc) + u + ';font-weight:700;color:#111;">' + E(co) + '</span>' +
+      (dates ? '<span style="float:right;font-family:' + SANS + ';font-size:' + (SUB_S*sc) + u + ';color:#333;white-space:nowrap;margin-left:' + (4*sc) + u + ';">' + E(dates) + '</span>' : '') +
     '</div>';
   };
 
   const domainRow = (domain) => domain
-    ? '<div style="font-family:Georgia,\'Times New Roman\',serif;font-style:italic;font-size:' + (9*sc) + 'px;color:#444;margin-bottom:' + (3*sc) + 'px;padding-left:' + (5*sc) + 'px;">' + E(domain) + '</div>'
+    ? '<div style="font-family:' + SERIF + ';font-style:italic;font-size:' + (SUB_S*sc) + u + ';color:#444;' +
+           'margin-bottom:' + (3*sc) + u + ';padding-left:' + (5*sc) + u + ';">' + E(domain) + '</div>'
     : '';
 
   const bul = (text) => {
-    // Sanitize: strip any leading bullet chars the AI may have prepended, ensure clean text
-    const cleanText = text.replace(/^[•\-\*\u25b8\s]+/, '').trim();
-    return '<div style="display:flex;gap:' + (4*sc) + 'px;margin-bottom:' + (2*sc) + 'px;padding-left:' + (2*sc) + 'px;">' +
-      '<span style="font-family:Arial,sans-serif;font-size:' + (9.5*sc) + 'px;flex-shrink:0;color:#111;">•</span>' +
-      '<span style="font-family:Arial,sans-serif;font-size:' + (9.5*sc) + 'px;color:#111;line-height:1.35;">' + E(cleanText) + '</span>' +
+    const ct = text.replace(/^[•\-\*\u25b8\s]+/, '').trim();
+    if (!ct) return '';
+    return '<div style="display:flex;gap:' + (4*sc) + u + ';margin-bottom:' + (BUL_MB*sc) + u + ';' +
+                 'padding-left:' + (2*sc) + u + ';' + (isPrint ? 'page-break-inside:avoid;' : '') + '">' +
+      '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';flex-shrink:0;color:#111;line-height:' + BUL_LH + ';">•</span>' +
+      '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';color:#111;line-height:' + BUL_LH + ';' +
+            'word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;">' + E(ct) + '</span>' +
     '</div>';
   };
 
-  // Summary
+  // ── SECTIONS — correct order per spec ──────────────────────
+  // 1 Summary
   const sumBuls = rbState.summary.filter(b => b.trim());
   const summaryHtml = sumBuls.length ? secHdr('SUMMARY') + sumBuls.map(bul).join('') : '';
 
-  // Experience
+  // 2 Experience
   const validExp = rbState.experience.filter(e => e.role);
   const expHtml = validExp.length
     ? secHdr('PROFESSIONAL EXPERIENCE') +
-      validExp.map((e, ei) => {
-        // data-exp-idx used by rbDetectPageSpills() to measure each entry's position
-        // break-inside:avoid on a BLOCK container prevents mid-entry page splits
+      validExp.map((e) => {
         const origIdx = rbState.experience.indexOf(e);
-        return '<div data-exp-idx="' + origIdx + '" style="break-inside:avoid;page-break-inside:avoid;display:block;margin-bottom:' + (4*sc) + 'px;">' +
+        const breakAttr = isPrint
+          ? 'break-inside:avoid;page-break-inside:avoid;display:block;'
+          : 'break-inside:avoid;page-break-inside:avoid;display:block;';
+        return '<div' + (isPrint ? '' : ' data-exp-idx="' + origIdx + '"') +
+          ' style="' + breakAttr + 'margin-bottom:' + (ENT_MB*sc) + u + ';">' +
           jobTitleRow(e.role) +
           companyRow(e.company, e.location, e.start, e.end) +
           domainRow(e.domain) +
@@ -3443,25 +3502,25 @@ function rbRenderTPM() {
       }).join('')
     : '';
 
-  // Education
+  // 3 Education
   const validEdu = rbState.education.filter(e => e.institution);
   const eduHtml = validEdu.length
     ? secHdr('EDUCATION') +
       validEdu.map(e => {
         const yr       = e.end || e.year || '';
-        const degField = [e.degree, e.field].filter(Boolean).join(' - ');
+        const degField = [e.degree, e.field].filter(Boolean).join(' – ');
         const gpaStr   = e.gpa ? ' · GPA ' + E(e.gpa) : '';
-        return '<div style="margin-bottom:' + (4*sc) + 'px;">' +
-          '<div style="display:flex;justify-content:space-between;align-items:baseline;">' +
-            '<span style="font-family:Georgia,\'Times New Roman\',serif;font-size:' + (9.5*sc) + 'px;font-weight:700;color:#111;">' + E(e.institution) + '</span>' +
-            '<span style="font-family:Arial,sans-serif;font-size:' + (9*sc) + 'px;color:#333;">' + E(yr) + '</span>' +
+        return '<div style="margin-bottom:' + (4*sc) + u + ';' + (isPrint ? 'page-break-inside:avoid;' : '') + '">' +
+          '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:' + (4*sc) + u + ';">' +
+            '<span style="font-family:' + SERIF + ';font-size:' + (COMP_S*sc) + u + ';font-weight:700;color:#111;word-wrap:break-word;">' + E(e.institution) + '</span>' +
+            '<span style="font-family:' + SANS + ';font-size:' + (SUB_S*sc) + u + ';color:#333;white-space:nowrap;flex-shrink:0;">' + E(yr) + '</span>' +
           '</div>' +
-          (degField ? '<div style="font-family:Georgia,\'Times New Roman\',serif;font-style:italic;font-size:' + (9*sc) + 'px;color:#333;margin-top:1px;">' + E(degField) + gpaStr + '</div>' : '') +
+          (degField ? '<div style="font-family:' + SERIF + ';font-style:italic;font-size:' + (SUB_S*sc) + u + ';color:#333;margin-top:1' + u + ';">' + E(degField) + gpaStr + '</div>' : '') +
         '</div>';
       }).join('')
     : '';
 
-  // Skills
+  // 4 Skills
   const skillCats = [
     sk.tech  && { label: 'Technical Program Management',  items: sk.tech  },
     sk.soft  && { label: 'Product & Delivery Leadership', items: sk.soft  },
@@ -3469,32 +3528,31 @@ function rbRenderTPM() {
   ].filter(Boolean);
   const skillsHtml = skillCats.length
     ? secHdr('SKILLS') + skillCats.map(cat => {
-        // Sanitize: remove unclosed parens, strip leading bullets, normalize separators
         const rawItems = cat.items
-          .replace(/[•·]/g, ',')          // normalize inline bullet separators to comma
+          .replace(/[\u2022\u00b7]/g, ',')
           .split(',')
-          .map(s => s.trim()
-            .replace(/^[•\-\*\s]+/, '')   // strip leading bullet chars
-            .replace(/\)+$/, '')          // strip trailing closing parens artifact e.g. "Design)"
-            .replace(/\.$/, '')           // strip trailing periods
-            .trim())
+          .map(s => s.trim().replace(/^[•\-\*\s]+/, '').replace(/\)+$/, '').replace(/\.$/, '').trim())
           .filter(s => s.length > 1);
         if (!rawItems.length) return '';
         const itemsStr = rawItems.join(' • ');
-        return '<div style="display:flex;gap:' + (4*sc) + 'px;margin-bottom:' + (2.5*sc) + 'px;padding-left:' + (2*sc) + 'px;">' +
-          '<span style="font-family:Arial,sans-serif;font-size:' + (9.5*sc) + 'px;flex-shrink:0;color:#111;">•</span>' +
-          '<span style="font-family:Arial,sans-serif;font-size:' + (9.5*sc) + 'px;color:#111;line-height:1.35;"><strong>' + E(cat.label) + ':</strong> ' + E(itemsStr) + '</span>' +
+        return '<div style="display:flex;gap:' + (4*sc) + u + ';margin-bottom:' + (2.5*sc) + u + ';' +
+                     'padding-left:' + (2*sc) + u + ';' + (isPrint ? 'page-break-inside:avoid;' : '') + '">' +
+          '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';flex-shrink:0;color:#111;line-height:' + BUL_LH + ';">•</span>' +
+          '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';color:#111;line-height:' + BUL_LH + ';word-wrap:break-word;">' +
+            '<strong>' + E(cat.label) + ':</strong> ' + E(itemsStr) +
+          '</span>' +
         '</div>';
       }).join('')
     : '';
 
-  // Certifications
-  const certHtml = rbState.certifications.length
+  // 5 Certifications
+  const certHtml = rbState.certifications.filter(c => c.name).length
     ? secHdr('CERTIFICATIONS') +
-      rbState.certifications.map(c =>
-        '<div style="display:flex;gap:' + (4*sc) + 'px;margin-bottom:' + (3*sc) + 'px;padding-left:' + (2*sc) + 'px;">' +
-          '<span style="font-family:Arial,sans-serif;font-size:' + (10.5*sc) + 'px;flex-shrink:0;">•</span>' +
-          '<span style="font-family:Arial,sans-serif;font-size:' + (10.5*sc) + 'px;color:#111;line-height:' + (1.5*sc) + ';"><strong>' + E(c.name) + '</strong>' +
+      rbState.certifications.filter(c => c.name).map(c =>
+        '<div style="display:flex;gap:' + (4*sc) + u + ';margin-bottom:' + (2.5*sc) + u + ';padding-left:' + (2*sc) + u + ';">' +
+          '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';flex-shrink:0;color:#111;line-height:' + BUL_LH + ';">•</span>' +
+          '<span style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';color:#111;line-height:' + BUL_LH + ';">' +
+            '<strong>' + E(c.name) + '</strong>' +
             (c.issuer ? ' · ' + E(c.issuer) : '') +
             (c.year   ? ' · ' + E(c.year)   : '') +
           '</span>' +
@@ -3502,79 +3560,103 @@ function rbRenderTPM() {
       ).join('')
     : '';
 
-  // Projects
+  // 6 Projects
   const validProj = rbState.projects.filter(pj => pj.name);
   const projHtml = validProj.length
     ? secHdr('PROJECTS') +
       validProj.map(proj => {
-        const techStr = proj.tech ? ' <span style="font-style:italic;color:#555;font-size:' + (9.5*sc) + 'px;">[' + E(proj.tech) + ']</span>' : '';
-        return '<div style="margin-bottom:' + (8*sc) + 'px;">' +
-          '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:' + (10.5*sc) + 'px;font-weight:700;margin-bottom:' + (2*sc) + 'px;">' + E(proj.name) + techStr + '</div>' +
+        const techStr = proj.tech
+          ? ' <span style="font-style:italic;color:#555;font-size:' + (SUB_S*sc) + u + ';">[' + E(proj.tech) + ']</span>'
+          : '';
+        return '<div style="margin-bottom:' + (ENT_MB*sc) + u + ';' + (isPrint ? 'page-break-inside:avoid;' : '') + '">' +
+          '<div style="font-family:' + SERIF + ';font-size:' + (COMP_S*sc) + u + ';font-weight:700;' +
+               'margin-bottom:' + (2*sc) + u + ';color:#0a0a0a;">' + E(proj.name) + techStr + '</div>' +
           proj.bullets.filter(b => b.trim()).map(bul).join('') +
         '</div>';
       }).join('')
     : '';
 
-  // Achievements
-  const achHtml = rbState.achievements.length
-    ? secHdr('ACHIEVEMENTS') +
-      rbState.achievements.map(a => bul(a)).join('')
+  // 7 Achievements
+  const achHtml = rbState.achievements.filter(a => a.trim()).length
+    ? secHdr('ACHIEVEMENTS') + rbState.achievements.filter(a => a.trim()).map(bul).join('')
     : '';
 
-  // Languages
+  // 8 Languages
   const langHtml = rbState.languages.length
     ? secHdr('LANGUAGES') +
-      '<div style="display:flex;flex-wrap:wrap;gap:' + (6*sc) + 'px;">' +
+      '<div style="display:flex;flex-wrap:wrap;gap:' + (5*sc) + u + ';margin-bottom:' + (2*sc) + u + ';">' +
       rbState.languages.map(l =>
-        '<div style="background:#f0f4ff;border:0.75px solid #c8d8f8;border-radius:3px;padding:' + (2*sc) + 'px ' + (7*sc) + 'px;font-family:Arial,sans-serif;font-size:' + (9*sc) + 'px;color:#111;">' +
-          '<strong>' + E(l.language) + '</strong>' + (l.proficiency ? ' <span style="color:#555;font-size:' + (8.5*sc) + 'px;">— ' + E(l.proficiency) + '</span>' : '') +
+        '<div style="background:#f0f4ff;border:' + (isPrint ? '0.5pt' : '0.75px') + ' solid #c8d8f8;' +
+             'border-radius:' + (isPrint ? '2pt' : '3px') + ';' +
+             'padding:' + (2*sc) + u + ' ' + (7*sc) + u + ';' +
+             'font-family:' + SANS + ';font-size:' + (SUB_S*sc) + u + ';color:#111;">' +
+          '<strong>' + E(l.language) + '</strong>' +
+          (l.proficiency ? ' <span style="color:#555;font-size:' + (8*sc) + u + ';">— ' + E(l.proficiency) + '</span>' : '') +
         '</div>'
       ).join('') +
       '</div>'
     : '';
 
-  // Publications
-  const pubHtml = rbState.publications.length
+  // 9 Publications
+  const pubHtml = rbState.publications.filter(pub => pub.title).length
     ? secHdr('PUBLICATIONS') +
-      rbState.publications.map(pub =>
-        '<div style="margin-bottom:' + (4*sc) + 'px;">' +
-          '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:' + (9.5*sc) + 'px;font-style:italic;color:#111;">' + E(pub.title) + '</div>' +
-          '<div style="font-family:Arial,sans-serif;font-size:' + (9*sc) + 'px;color:#444;">' +
+      rbState.publications.filter(pub => pub.title).map(pub =>
+        '<div style="margin-bottom:' + (4*sc) + u + ';' + (isPrint ? 'page-break-inside:avoid;' : '') + '">' +
+          '<div style="font-family:' + SERIF + ';font-style:italic;font-size:' + (COMP_S*sc) + u + ';color:#111;word-wrap:break-word;">' + E(pub.title) + '</div>' +
+          '<div style="font-family:' + SANS + ';font-size:' + (SUB_S*sc) + u + ';color:#444;">' +
             [pub.journal, pub.year].filter(Boolean).join(' · ') +
-            (pub.url ? ' — <span style="color:#1F3A93;">' + E(pub.url) + '</span>' : '') +
+            (pub.url ? ' — <span style="color:#1F3A93;word-break:break-all;">' + E(pub.url) + '</span>' : '') +
           '</div>' +
         '</div>'
       ).join('')
     : '';
 
-  // References
+  // 10 References
   const refHtml = rbState.references.length
     ? secHdr('REFERENCES') +
       (rbState.references[0]?.onRequest
-        ? '<div style="font-family:Arial,sans-serif;font-size:' + (9.5*sc) + 'px;font-style:italic;color:#555;">Available on request</div>'
-        : '<div style="display:grid;grid-template-columns:1fr 1fr;gap:' + (8*sc) + 'px;">' +
+        ? '<div style="font-family:' + SANS + ';font-size:' + (BUL_S*sc) + u + ';font-style:italic;color:#555;">Available on request</div>'
+        : '<div style="display:grid;grid-template-columns:1fr 1fr;gap:' + (8*sc) + u + ';">' +
           rbState.references.map(r =>
-            '<div style="background:#f9f9f9;border:0.75px solid #ddd;padding:' + (6*sc) + 'px;border-radius:3px;">' +
-              '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:' + (9.5*sc) + 'px;font-weight:700;color:#111;">' + E(r.name) + '</div>' +
-              (r.title   ? '<div style="font-family:Arial,sans-serif;font-size:' + (8.5*sc) + 'px;color:#444;">' + E(r.title) + (r.company ? ', ' + E(r.company) : '') + '</div>' : '') +
-              (r.email   ? '<div style="font-family:Arial,sans-serif;font-size:' + (8.5*sc) + 'px;color:#1F3A93;">' + E(r.email) + '</div>' : '') +
-              (r.phone   ? '<div style="font-family:Arial,sans-serif;font-size:' + (8.5*sc) + 'px;color:#555;">' + E(r.phone) + '</div>' : '') +
+            '<div style="background:#f9f9f9;border:' + (isPrint ? '0.5pt' : '0.75px') + ' solid #ddd;' +
+                 'padding:' + (6*sc) + u + ';border-radius:' + (isPrint ? '2pt' : '3px') + ';' +
+                 (isPrint ? 'page-break-inside:avoid;' : '') + '">' +
+              '<div style="font-family:' + SERIF + ';font-size:' + (COMP_S*sc) + u + ';font-weight:700;color:#111;">' + E(r.name || '') + '</div>' +
+              (r.title ? '<div style="font-family:' + SANS + ';font-size:' + (8.5*sc) + u + ';color:#444;">' + E(r.title) + (r.company ? ', ' + E(r.company) : '') + '</div>' : '') +
+              (r.email ? '<div style="font-family:' + SANS + ';font-size:' + (8.5*sc) + u + ';color:#1F3A93;">' + E(r.email) + '</div>' : '') +
+              (r.phone ? '<div style="font-family:' + SANS + ';font-size:' + (8.5*sc) + u + ';color:#555;">' + E(r.phone) + '</div>' : '') +
             '</div>'
           ).join('') +
           '</div>'
       )
     : '';
 
-  // Apply font choice
-  const fontCss = (RB_FONTS[rbState.font] || RB_FONTS.arial).css;
+  // ── ASSEMBLE ──────────────────────────────────────────────
+  const bodyFont = (RB_FONTS[rbState.font] || RB_FONTS.arial).css;
+  const padH  = isPrint ? '13mm' : '50px';
+  const padV  = isPrint ? '14mm' : '46px';
+  const minH  = isPrint ? '297mm' : '100%';
 
-  return '<div style="font-family:' + fontCss + ';font-size:' + (9.5*sc) + 'px;color:#111;background:white;padding:' + (15*sc) + 'px ' + (14*sc) + 'px ' + (15*sc) + 'px ' + (14*sc) + 'px;min-height:100%;">' +
-    '<div style="text-align:center;margin-bottom:' + (7*sc) + 'px;">' +
-      '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:' + (20*sc) + 'px;font-weight:700;letter-spacing:1px;color:#0a0a0a;line-height:1.1;margin-bottom:' + (2*sc) + 'px;">' + E(_rbNormalizeName(p.name) || 'YOUR NAME') + '</div>' +
-      (p.title ? '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:' + (11*sc) + 'px;font-weight:700;color:#222;margin-bottom:' + (2*sc) + 'px;">' + E(p.title) + '</div>' : '') +
+  return '<div style="' +
+    'font-family:' + bodyFont + ';' +
+    'font-size:' + (BASE*sc) + u + ';' +
+    'color:#111;background:white;' +
+    'padding:' + padV + ' ' + padH + ';' +
+    'min-height:' + minH + ';' +
+    'word-wrap:break-word;overflow-wrap:break-word;' +
+    (isPrint ? 'width:210mm;box-sizing:border-box;' : '') +
+    '">' +
+    // Name + title + contact header
+    '<div style="text-align:center;margin-bottom:' + (7*sc) + u + ';">' +
+      '<div style="font-family:' + SERIF + ';font-size:' + (NAME_S*sc) + u + ';font-weight:700;' +
+           'letter-spacing:1' + u + ';color:#0a0a0a;line-height:1.1;margin-bottom:' + (2*sc) + u + ';">' +
+        E(_rbNormalizeName(p.name) || 'YOUR NAME') +
+      '</div>' +
+      (p.title ? '<div style="font-family:' + SERIF + ';font-size:' + (TITL_S*sc) + u + ';font-weight:700;color:#222;margin-bottom:' + (3*sc) + u + ';">' + E(p.title) + '</div>' : '') +
       contactBlock +
     '</div>' +
-    summaryHtml + expHtml + eduHtml + skillsHtml + projHtml + certHtml +
+    // Sections in correct order
+    summaryHtml + expHtml + eduHtml + skillsHtml + certHtml + projHtml +
     achHtml + langHtml + pubHtml + refHtml +
   '</div>';
 }
@@ -3644,7 +3726,8 @@ const rbQA = {
 
 function rbRunQA() {
   clearTimeout(rbQA.timer);
-  rbQA.timer = setTimeout(_rbRunQANow, 800);
+  // 2s debounce — QA is expensive and noisy if it runs on every keystroke
+  rbQA.timer = setTimeout(_rbRunQANow, 2000);
 }
 
 function _rbRunQANow() {
@@ -3810,220 +3893,31 @@ function rbExportPDF() {
   let pageCSS     = '';
 
   if (tpl === 'tpm') {
-    // ── TPM Pro: pixel-perfect A4 with pt units, @page margin:0 kills browser header/footer ──
-    // ATS mode: no emoji icons, skip raw placeholders like "LinkedIn", "GitHub", "N/A"
-    const _isPlaceholder = (v) => !v || /^(linkedin|github|n\/a|your[- ]|http$|www$|link$|github$|portfolio$|website$)/i.test(v.trim());
-    const _fmtLink = (v) => {
-      if (_isPlaceholder(v)) return null;
-      // Show just the domain/path, no protocol noise
-      return E(v.replace(/^https?:\/\/(www\.)?/, ''));
-    };
-    const eLine1 = [
-      p.location && E(p.location),
-      p.email    && E(p.email),
-      p.phone    && E(p.phone),
-    ].filter(Boolean).join(' | ');
-    const eLine2 = [
-      _fmtLink(p.linkedin),
-      _fmtLink(p.portfolio),
-      _fmtLink(p.website),
-    ].filter(Boolean).join('<span style="margin:0 6px;color:#888;"> || </span>');
-    const eContactBlock =
-      (eLine1 ? '<div style="font-family:Arial,sans-serif;font-size:9pt;color:#333;line-height:1.45;">' + eLine1 + '</div>' : '') +
-      (eLine2.filter(Boolean).length ? '<div style="font-family:Arial,sans-serif;font-size:9pt;color:#333;line-height:1.45;">' + eLine2.filter(Boolean).join(' | ') + '</div>' : '');
-
-    const secHdr = (label) =>
-      '<div style="margin-top:7pt;margin-bottom:2pt;page-break-after:avoid;">' +
-        '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:10pt;font-weight:700;letter-spacing:0.3pt;color:#111;">' + label + '</div>' +
-        '<div style="height:0.75pt;background:#111;margin-top:1.5pt;"></div>' +
-      '</div>';
-
-    const jobRow = (title) =>
-      '<div style="position:relative;margin-top:4pt;padding-left:6pt;">' +
-        '<div style="position:absolute;left:0;top:0;bottom:0;width:3pt;background:' + ac + ';"></div>' +
-        '<div style="background:#EBF4FF;padding:2pt 5pt;font-family:Georgia,\'Times New Roman\',serif;font-size:9.5pt;font-weight:700;color:#0a0a0a;">' +
-          E(title) +
-        '</div>' +
-      '</div>';
-
-    const coRow = (company, location, start, end) => {
-      const dates = [start, end].filter(Boolean).join(' – ');
-      const co    = [company, location].filter(Boolean).join(', ');
-      return '<div style="background:#EAEAEA;padding:1.5pt 5pt;margin-bottom:2pt;overflow:hidden;">' +
-        '<span style="font-family:Georgia,\'Times New Roman\',serif;font-size:9.5pt;font-weight:700;color:#111;">' + E(co) + '</span>' +
-        (dates ? '<span style="float:right;font-family:Arial,sans-serif;font-size:9pt;color:#333;">' + E(dates) + '</span>' : '') +
-      '</div>';
-    };
-
-    const domRow = (d) => d
-      ? '<div style="font-family:Georgia,\'Times New Roman\',serif;font-style:italic;font-size:9pt;color:#444;margin-bottom:2pt;padding-left:4pt;">' + E(d) + '</div>'
-      : '';
-
-    const bulPt = (t) => {
-      // Strip any accidental leading bullet chars the AI may have prepended
-      const ct = t.replace(/^[•\-\*\u25b8\s]+/, '').trim();
-      return '<div style="display:flex;gap:4pt;margin-bottom:1.5pt;padding-left:2pt;page-break-inside:avoid;">' +
-        '<span style="font-family:Arial,sans-serif;font-size:9.5pt;flex-shrink:0;color:#111;">•</span>' +
-        '<span style="font-family:Arial,sans-serif;font-size:9.5pt;color:#111;line-height:1.3;">' + E(ct) + '</span>' +
-      '</div>';
-    };
-
-    const sumBuls = rbState.summary.filter(b=>b.trim());
-    const sumPt   = sumBuls.length ? secHdr('SUMMARY') + sumBuls.map(bulPt).join('') : '';
-
-    const vExp  = rbState.experience.filter(e=>e.role);
-    const expPt = vExp.length
-      ? secHdr('PROFESSIONAL EXPERIENCE') +
-        vExp.map(e =>
-          // break-inside:avoid MUST be on a display:block element — flex containers
-          // are ignored by the browser's page-break engine in many implementations.
-          // Both the CSS3 property (break-inside) and legacy (page-break-inside) are
-          // set for maximum browser compatibility (Chrome, Firefox, Edge, Safari).
-          '<div style="break-inside:avoid;page-break-inside:avoid;display:block;margin-bottom:3pt;">' +
-            jobRow(e.role) +
-            coRow(e.company, e.location, e.start, e.end) +
-            domRow(e.domain) +
-            e.bullets.filter(b=>b.trim()).map(bulPt).join('') +
-          '</div>'
-        ).join('')
-      : '';
-
-    const vEdu  = rbState.education.filter(e=>e.institution);
-    const eduPt = vEdu.length
-      ? secHdr('EDUCATION') +
-        vEdu.map(e => {
-          const yr  = e.end || e.year || '';
-          const df  = [e.degree, e.field].filter(Boolean).join(' - ');
-          const gpa = e.gpa ? ' · GPA ' + E(e.gpa) : '';
-          return '<div style="margin-bottom:3pt;page-break-inside:avoid;">' +
-            '<div style="display:flex;justify-content:space-between;align-items:baseline;">' +
-              '<span style="font-family:Georgia,\'Times New Roman\',serif;font-size:9.5pt;font-weight:700;color:#111;">' + E(e.institution) + '</span>' +
-              '<span style="font-family:Arial,sans-serif;font-size:9pt;color:#333;">' + E(yr) + '</span>' +
-            '</div>' +
-            (df ? '<div style="font-family:Georgia,\'Times New Roman\',serif;font-style:italic;font-size:9pt;color:#333;margin-top:0.5pt;">' + E(df) + gpa + '</div>' : '') +
-          '</div>';
-        }).join('')
-      : '';
-
-    const sk = rbState.skills;
-    const sCats = [
-      sk.tech  && { label: 'Technical Program Management',  items: sk.tech  },
-      sk.soft  && { label: 'Product & Delivery Leadership', items: sk.soft  },
-      sk.tools && { label: 'Domains',                       items: sk.tools },
-    ].filter(Boolean);
-    const skillsPt = sCats.length
-      ? secHdr('SKILLS') + sCats.map(cat => {
-          const rawItems = cat.items
-            .replace(/[•·]/g, ',')
-            .split(',')
-            .map(s => s.trim().replace(/^[•\-\*\s]+/, '').replace(/\)+$/, '').replace(/\.$/, '').trim())
-            .filter(s => s.length > 1);
-          if (!rawItems.length) return '';
-          const itemsStr = rawItems.join(' • ');
-          return '<div style="display:flex;gap:4pt;margin-bottom:2.5pt;padding-left:2pt;page-break-inside:avoid;">' +
-            '<span style="font-family:Arial,sans-serif;font-size:9.5pt;flex-shrink:0;color:#111;">•</span>' +
-            '<span style="font-family:Arial,sans-serif;font-size:9.5pt;color:#111;line-height:1.35;"><strong>' + E(cat.label) + ':</strong> ' + E(itemsStr) + '</span>' +
-          '</div>';
-        }).join('')
-      : '';
-
-    const certPt = rbState.certifications.length
-      ? secHdr('CERTIFICATIONS') +
-        rbState.certifications.map(c =>
-          '<div style="display:flex;gap:4pt;margin-bottom:2.5pt;padding-left:2pt;">' +
-            '<span style="font-family:Arial,sans-serif;font-size:9.5pt;flex-shrink:0;">•</span>' +
-            '<span style="font-family:Arial,sans-serif;font-size:9.5pt;color:#111;line-height:1.35;"><strong>' + E(c.name) + '</strong>' +
-              (c.issuer ? ' · ' + E(c.issuer) : '') +
-              (c.year   ? ' · ' + E(c.year)   : '') +
-            '</span>' +
-          '</div>'
-        ).join('')
-      : '';
-
-    const vProj  = rbState.projects.filter(pj=>pj.name);
-    const projPt = vProj.length
-      ? secHdr('PROJECTS') +
-        vProj.map(proj => {
-          const ts = proj.tech ? ' <span style="font-style:italic;color:#555;font-size:9pt;">[' + E(proj.tech) + ']</span>' : '';
-          return '<div style="margin-bottom:5pt;page-break-inside:avoid;">' +
-            '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:9.5pt;font-weight:700;margin-bottom:1.5pt;">' + E(proj.name) + ts + '</div>' +
-            proj.bullets.filter(b=>b.trim()).map(bulPt).join('') +
-          '</div>';
-        }).join('')
-      : '';
-
-    // New sections for export
-    const achPt = rbState.achievements.length
-      ? secHdr('ACHIEVEMENTS') + rbState.achievements.map(bulPt).join('')
-      : '';
-
-    const langPt = rbState.languages.length
-      ? secHdr('LANGUAGES') +
-        '<div style="display:flex;flex-wrap:wrap;gap:5pt;">' +
-        rbState.languages.map(l =>
-          '<div style="background:#f0f4ff;border:0.5pt solid #c8d8f8;border-radius:2pt;padding:1.5pt 6pt;font-family:Arial,sans-serif;font-size:9pt;color:#111;">' +
-            '<strong>' + E(l.language) + '</strong>' + (l.proficiency ? ' <span style="color:#555;font-size:8.5pt;">— ' + E(l.proficiency) + '</span>' : '') +
-          '</div>'
-        ).join('') + '</div>'
-      : '';
-
-    const pubPt = rbState.publications.length
-      ? secHdr('PUBLICATIONS') +
-        rbState.publications.map(pub =>
-          '<div style="margin-bottom:3pt;page-break-inside:avoid;">' +
-            '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:9.5pt;font-style:italic;color:#111;">' + E(pub.title) + '</div>' +
-            '<div style="font-family:Arial,sans-serif;font-size:9pt;color:#444;">' +
-              [pub.journal, pub.year].filter(Boolean).join(' · ') +
-              (pub.url ? ' — ' + E(pub.url) : '') +
-            '</div></div>'
-        ).join('')
-      : '';
-
-    const refPt = rbState.references.length
-      ? secHdr('REFERENCES') +
-        (rbState.references[0]?.onRequest
-          ? '<div style="font-family:Arial,sans-serif;font-size:9.5pt;font-style:italic;color:#555;">Available on request</div>'
-          : '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6pt;">' +
-            rbState.references.map(r =>
-              '<div style="background:#f9f9f9;border:0.5pt solid #ddd;padding:5pt;page-break-inside:avoid;">' +
-                '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:9.5pt;font-weight:700;">' + E(r.name) + '</div>' +
-                (r.title  ? '<div style="font-size:8.5pt;color:#444;">' + E(r.title) + (r.company?', '+E(r.company):'') + '</div>' : '') +
-                (r.email  ? '<div style="font-size:8.5pt;color:#1F3A93;">' + E(r.email) + '</div>' : '') +
-                (r.phone  ? '<div style="font-size:8.5pt;color:#555;">'   + E(r.phone) + '</div>' : '') +
-              '</div>'
-            ).join('') + '</div>'
-        )
-      : '';
-
-    // Font selection for PDF
-    const exportFontCss = (RB_FONTS[rbState.font] || RB_FONTS.arial).css;
-
-    bodyContent =
-      '<div class="page">' +
-        '<div style="text-align:center;margin-bottom:6pt;">' +
-          '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:20pt;font-weight:700;letter-spacing:1pt;color:#0a0a0a;line-height:1.1;margin-bottom:2pt;">' + E(_rbNormalizeName(p.name || 'YOUR NAME')) + '</div>' +
-          (p.title ? '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:11pt;font-weight:700;color:#222;margin-bottom:2pt;">' + E(p.title) + '</div>' : '') +
-          eContactBlock +
-        '</div>' +
-        sumPt + expPt + eduPt + skillsPt + projPt + certPt +
-        achPt + langPt + pubPt + refPt +
-      '</div>';
+    // ── TPM Pro: use the SAME rbRenderTPM() as preview, in 'print' mode
+    // This guarantees preview === exported PDF
+    // ── Single source of truth: rbRenderTPM('print') generates the PDF HTML ──
+    // preview uses rbRenderTPM('screen') — same logic, different units
+    const printHtml = rbRenderTPM('print');
+    bodyContent = printHtml;
 
     pageCSS =
-      '/* Zero @page margins eliminate browser-injected URL, date and page-number headers/footers */\n' +
+      '/* @page margin:0 eliminates browser URL/date/page headers & footers */\n' +
       '@page { size: A4; margin: 0; }\n' +
       'html, body { margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }\n' +
-      '/* The .page wrapper carries the real document margins */\n' +
-      '.page { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 12mm 13mm 14mm 13mm; font-family: ' + exportFontCss + '; font-size: 9.5pt; color: #111; box-sizing: border-box; }\n' +
-      '/* Critical: block elements with break-inside:avoid must be display:block — flex breaks the property */\n' +
+      '* { box-sizing: border-box; word-wrap: break-word; overflow-wrap: break-word; }\n' +
+      '/* block elements with break-inside:avoid must be display:block */\n' +
       'div[style*="break-inside:avoid"] { display: block !important; break-inside: avoid; page-break-inside: avoid; }';
 
   } else {
-    // Non-TPM templates: use existing preview content
-    bodyContent = document.getElementById('rb-preview-content')?.innerHTML || '';
-    if      (tpl === 'modern')  pageCSS = `@page{size:A4;margin:0} html,body{margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;} .page{width:210mm;min-height:297mm;margin:0 auto;font-family:Calibri,"Segoe UI",Arial,sans-serif;font-size:${8.5*sc}px;}`;
-    else if (tpl === 'minimal') pageCSS = `@page{size:A4;margin:0} html,body{margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;} .page{width:210mm;min-height:297mm;margin:0 auto;padding:12mm 16mm;font-family:Calibri,"Helvetica Neue",Arial,sans-serif;font-size:${8.5*sc}px;line-height:${1.55*sc};box-sizing:border-box;}`;
-    else                        pageCSS = `@page{size:A4;margin:0} html,body{margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;} .page{width:210mm;min-height:297mm;margin:0 auto;padding:12mm 14mm;font-family:Calibri,"Segoe UI",Arial,sans-serif;font-size:${8.8*sc}px;line-height:${1.5*sc};box-sizing:border-box;}`;
+    // Non-TPM: extract the raw resume HTML from the measurement div (no page-sheet chrome)
+    const tempMeasure = document.getElementById('_rb_temp_measure');
+    bodyContent = tempMeasure ? tempMeasure.innerHTML : (document.getElementById('rb-preview-content')?.innerHTML || '');
+    const basePx = (8.5 * sc).toFixed(1);
+    const lhVal  = (1.5  * sc).toFixed(2);
+    const baseCSS = `@page{size:A4;margin:0} html,body{margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;} *{box-sizing:border-box;word-wrap:break-word;overflow-wrap:break-word;}`;
+    if      (tpl === 'modern')  pageCSS = baseCSS + ` body{font-family:Calibri,"Segoe UI",Arial,sans-serif;font-size:${basePx}px;} .page{width:210mm;min-height:297mm;margin:0 auto;padding:13mm;}`;
+    else if (tpl === 'minimal') pageCSS = baseCSS + ` body{font-family:Calibri,"Helvetica Neue",Arial,sans-serif;font-size:${basePx}px;line-height:${lhVal};} .page{width:210mm;min-height:297mm;margin:0 auto;padding:13mm 16mm;}`;
+    else                        pageCSS = baseCSS + ` body{font-family:Calibri,"Segoe UI",Arial,sans-serif;font-size:${basePx}px;line-height:${lhVal};} .page{width:210mm;min-height:297mm;margin:0 auto;padding:13mm 14mm;}`;
     bodyContent = `<div class="page">${bodyContent}</div>`;
   }
 
@@ -4046,13 +3940,27 @@ ${bodyContent}
   const url  = URL.createObjectURL(blob);
   const win  = window.open(url, '_blank');
   if (!win) {
+    // Popup blocked — download as HTML and guide the user
     const a = document.createElement('a');
     a.href = url;
     a.download = `${(p.name||'Resume').replace(/\s+/g,'_')}_Resume.html`;
     a.click();
-    showToast('Downloaded — open the HTML file and Ctrl+P / Cmd+P to save as PDF', false);
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+    showToast('HTML file downloaded — open it in your browser and press Ctrl+P (Cmd+P on Mac) → Save as PDF', false);
   } else {
-    setTimeout(() => { win.focus(); win.print(); URL.revokeObjectURL(url); }, 900);
+    // Auto-trigger print dialog in new tab
+    win.onload = () => {
+      win.focus();
+      setTimeout(() => {
+        win.print();
+        setTimeout(() => { URL.revokeObjectURL(url); }, 2000);
+      }, 600);
+    };
+    // Fallback if onload already fired
+    setTimeout(() => {
+      try { win.focus(); win.print(); } catch(e) {}
+    }, 1200);
+    showToast('Print dialog opened — choose "Save as PDF" in your printer options', false);
   }
 }
 
@@ -4321,52 +4229,46 @@ function rbHideSpillToast() {
 // Internal: generate body HTML for chosen template
 function _rbBodyHtml() {
   const tpl = rbState.template;
-  if      (tpl === 'tpm')     return rbRenderTPM();
+  if      (tpl === 'tpm')     return rbRenderTPM('screen');
   else if (tpl === 'modern')  return rbRenderModern();
   else if (tpl === 'minimal') return rbRenderMinimal();
   else                        return rbRenderClassic();
 }
 
 // Paginate bodyHtml into page-sheets for a given container
+// Strategy: render full resume HTML inside a white A4-sized card.
+// CSS transform scale handles fitting it to the column.
+// This gives identical visual output to the printed PDF.
 function _rbPaginateInto(container, bodyHtml, floatScale) {
   const A4_H_PX   = 1123;
-  const PAD_H     = 46;
-  const CONTENT_H = A4_H_PX - PAD_H * 2;
+  const PAD_H     = 92;   // ~46px top + 46px bottom padding in the resume content
+  const CONTENT_H = A4_H_PX - PAD_H;
   const tempDiv   = document.getElementById('_rb_temp_measure');
   if (!tempDiv || !container) return 1;
-  const pageCount = Math.max(1, Math.ceil(tempDiv.scrollHeight / CONTENT_H));
+  const totalH    = tempDiv.scrollHeight;
+  const pageCount = Math.max(1, Math.ceil(totalH / CONTENT_H));
 
   let html = '';
   for (let pg = 0; pg < pageCount; pg++) {
-    const offsetY = pg * CONTENT_H;
-    const isSpill = rbSpillState.spillingEntries.some(s => s.page === pg);
+    const offsetY   = pg * CONTENT_H;
+    const isSpill   = rbSpillState.spillingEntries.some(s => s.page === pg);
+    const scaleAttr = floatScale ? `transform:scale(${floatScale});transform-origin:top left;width:${Math.round(100/floatScale)}%;` : '';
+    const heightAttr = floatScale ? `height:${Math.round(CONTENT_H * floatScale)}px;` : '';
+    const wrapStyle  = floatScale
+      ? `overflow:hidden;${heightAttr}position:relative;`
+      : `overflow:hidden;height:${CONTENT_H}px;position:relative;`;
+    const innerStyle = floatScale
+      ? `position:absolute;top:${-offsetY}px;left:0;right:0;${scaleAttr}`
+      : `position:absolute;top:${-offsetY}px;left:0;right:0;`;
 
-    if (floatScale) {
-      const scaledH = Math.round(CONTENT_H * floatScale);
-      html += `
-        <div class="rb-page-label">Page ${pg + 1} of ${pageCount}</div>
-        <div class="rb-page-sheet" style="height:${scaledH}px;aspect-ratio:unset;">
-          <div style="overflow:hidden;height:${scaledH}px;position:relative;">
-            <div style="position:absolute;top:0;left:0;
-              transform:scale(${floatScale}) translateY(${-offsetY}px);
-              transform-origin:top left;width:${Math.round(100/floatScale)}%;">
-              ${bodyHtml}
-            </div>
-          </div>
-          ${isSpill ? '<div class="rb-spill-sheet-badge">&#9888; Entry splits here — consider removing a bullet</div>' : ''}
-        </div>`;
-    } else {
-      html += `
-        <div class="rb-page-label">Page ${pg + 1} of ${pageCount}</div>
-        <div class="rb-page-sheet">
-          <div style="overflow:hidden;height:${CONTENT_H}px;position:relative;">
-            <div style="position:absolute;top:${-offsetY}px;left:0;right:0;">
-              ${bodyHtml}
-            </div>
-          </div>
-          ${isSpill ? '<div class="rb-spill-sheet-badge">&#9888; Entry splits here — consider removing a bullet</div>' : ''}
-        </div>`;
-    }
+    html += `
+      <div class="rb-page-label">Page ${pg + 1} of ${pageCount}</div>
+      <div class="rb-page-sheet">
+        <div style="${wrapStyle}">
+          <div style="${innerStyle}">${bodyHtml}</div>
+        </div>
+        ${isSpill ? '<div class="rb-spill-sheet-badge">&#9888; Entry splits here</div>' : ''}
+      </div>`;
   }
   container.innerHTML = html;
   return pageCount;
