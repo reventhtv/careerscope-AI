@@ -1,5 +1,7 @@
 """
 main.py — CareerScope AI v2 · FastAPI Backend
+UPDATED: Improved AI prompts for resume quality (22-word bullet limit,
+         role-title preservation, ATS-safe output, skills formatting)
 """
 
 import io
@@ -28,7 +30,7 @@ logging.basicConfig(
 )
 log = logging.getLogger("careerscopeai")
 
-# ── Analytics store (in-memory, survives restarts via log drain) ──
+# ── Analytics store ────────────────────────────────────────────
 _analytics: dict = {
     "total_uploads":       0,
     "total_analyses":      0,
@@ -37,27 +39,20 @@ _analytics: dict = {
     "total_pdf_exports":   0,
     "total_linkedin":      0,
     "total_builder_fills": 0,
-    "events":              [],          # last 500 events ring buffer
-    "daily":               defaultdict(lambda: defaultdict(int)),  # date → event → count
+    "events":              [],
+    "daily":               defaultdict(lambda: defaultdict(int)),
     "started_at":          datetime.now(timezone.utc).isoformat(),
 }
 _MAX_EVENTS = 500
 
 def track(event: str, meta: dict | None = None):
-    """Log an analytics event to memory and stdout (captured by Render logs)."""
     ts  = datetime.now(timezone.utc).isoformat()
     day = ts[:10]
     entry = {"event": event, "ts": ts, **(meta or {})}
-
-    # Ring-buffer
     _analytics["events"].append(entry)
     if len(_analytics["events"]) > _MAX_EVENTS:
         _analytics["events"].pop(0)
-
-    # Daily counters
     _analytics["daily"][day][event] += 1
-
-    # Global counters
     key_map = {
         "upload":         "total_uploads",
         "ai_analysis":    "total_analyses",
@@ -69,15 +64,13 @@ def track(event: str, meta: dict | None = None):
     }
     if event in key_map:
         _analytics[key_map[event]] += 1
-
     log.info("EVENT | %s | %s", event, json.dumps(meta or {}))
 
-# ── Keepalive (self-ping to prevent Render cold starts) ───────
+# ── Keepalive ──────────────────────────────────────────────────
 SELF_URL = os.environ.get("RENDER_EXTERNAL_URL", "")
 
 async def _keepalive_loop():
-    """Ping /health every 10 minutes so Render free tier stays warm."""
-    await asyncio.sleep(30)          # wait for server to fully start
+    await asyncio.sleep(30)
     while True:
         try:
             url = (SELF_URL.rstrip("/") + "/health") if SELF_URL else None
@@ -87,7 +80,7 @@ async def _keepalive_loop():
                 log.info("KEEPALIVE | pinged %s", url)
         except Exception as exc:
             log.warning("KEEPALIVE | failed: %s", exc)
-        await asyncio.sleep(600)     # 10 minutes
+        await asyncio.sleep(600)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -99,26 +92,18 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="CareerScope AI", lifespan=lifespan)
 
 _sessions: dict[str, dict] = {}
-_active_session: list[str] = []   # single-slot — only one live session at a time
+_active_session: list[str] = []
 
 BASE_DIR = Path(__file__).parent.resolve()
 
 
 def _clear_session(sid: str) -> None:
-    """Remove a session and all cached data associated with it."""
     _sessions.pop(sid, None)
     if sid in _active_session:
         _active_session.remove(sid)
 
 def _extract_json(raw: str) -> dict | list:
-    """
-    Robustly extract JSON from an AI response that may contain
-    leading/trailing prose, markdown fences, or other noise.
-    Tries multiple strategies in order.
-    """
     text = raw.strip()
-
-    # Strategy 1: strip markdown fences
     if text.startswith("```"):
         text = re.sub(r"^```[a-z]*\n?", "", text)
         text = re.sub(r"\n?```$", "", text.strip())
@@ -126,14 +111,10 @@ def _extract_json(raw: str) -> dict | list:
             return json.loads(text.strip())
         except Exception:
             pass
-
-    # Strategy 2: direct parse (already clean)
     try:
         return json.loads(text)
     except Exception:
         pass
-
-    # Strategy 3: find first { ... } block (handles leading prose)
     start = text.find('{')
     end   = text.rfind('}')
     if start != -1 and end != -1 and end > start:
@@ -141,8 +122,6 @@ def _extract_json(raw: str) -> dict | list:
             return json.loads(text[start:end+1])
         except Exception:
             pass
-
-    # Strategy 4: find first [ ... ] block (list response)
     start = text.find('[')
     end   = text.rfind(']')
     if start != -1 and end != -1 and end > start:
@@ -150,100 +129,67 @@ def _extract_json(raw: str) -> dict | list:
             return json.loads(text[start:end+1])
         except Exception:
             pass
-
     raise ValueError(f"No valid JSON found in response: {text[:200]}")
 
 
-
-
-# ── PDF helpers ──────────────────────────────────────────────
+# ── PDF helpers ────────────────────────────────────────────────
 
 def extract_text_from_pdf_bytes(data: bytes) -> str:
-    """
-    Extract text from PDF bytes. Handles single-column and two-column layouts.
-    For two-column PDFs (e.g. enhancecv, modern resume templates), the left sidebar
-    typically contains contact/skills and the right main body has the actual content.
-    We detect and merge columns in reading order to avoid jumbled output.
-    """
     text = ""
     try:
         with pdfplumber.open(io.BytesIO(data)) as pdf:
             for page in pdf.pages:
-                # Try smart column detection: check if the page has a clear left sidebar
-                # by looking for text density in the left 30% vs right 70%
                 page_text = page.extract_text() or ""
                 width = page.width
-
-                # Detect two-column: attempt left/right crop and see if right column
-                # alone is substantially larger and more structured
                 try:
                     left_crop  = page.crop((0,          0, width * 0.30, page.height))
                     right_crop = page.crop((width * 0.30, 0, width,       page.height))
                     left_text  = left_crop.extract_text()  or ""
                     right_text = right_crop.extract_text() or ""
-
-                    # Heuristic: two-column if right column has 3x+ chars of left
-                    # AND right column contains experience/education section headers
                     has_sections = any(s in right_text.upper()
                                        for s in ["EXPERIENCE", "EDUCATION", "SUMMARY"])
                     is_two_col = (len(right_text) > len(left_text) * 2.5) and has_sections
-
                     if is_two_col:
-                        # Merge: right column main body first (has the important content),
-                        # then append left column (contact/skills)
                         text += right_text + "\n" + left_text
                     else:
                         text += page_text
                 except Exception:
                     text += page_text
-
     except Exception as exc:
         raise ValueError(f"Could not parse PDF: {exc}") from exc
     return text.strip()
 
 
-# ── Analysis helpers ─────────────────────────────────────────
+# ── Analysis helpers ───────────────────────────────────────────
 
 def calculate_ats_breakdown(text: str) -> dict:
     t = text.lower()
-
-    # Contact
     has_email = bool(re.search(r"\S+@\S+\.\S+", text))
     has_phone = bool(re.search(r"\+?\d[\d\s\-]{8,}", text))
     has_linkedin = "linkedin" in t
     contact_score = int(((has_email + has_phone + has_linkedin) / 3) * 100)
-
-    # Keywords density
     keyword_sections = sum([
         "skills" in t, "experience" in t, "education" in t,
         "summary" in t or "objective" in t or "profile" in t,
         "projects" in t or "achievements" in t or "accomplishments" in t,
     ])
     keywords_score = int((keyword_sections / 5) * 100)
-
-    # Quantified achievements
     numbers = re.findall(r"\b\d+[%xX]?\b", text)
     quant_score = min(100, len(numbers) * 10)
-
-    # Structure
     sections = sum([
         "education" in t, "experience" in t or "work" in t,
         "skills" in t, "summary" in t or "profile" in t or "objective" in t,
         "projects" in t or "certifications" in t or "achievements" in t,
     ])
     structure_score = int((sections / 5) * 100)
-
-    # Action verbs
     action_verbs = [
-        "led", "built", "designed", "developed", "managed", "delivered",
-        "improved", "increased", "reduced", "launched", "created", "implemented",
-        "optimized", "architected", "spearheaded", "drove", "achieved", "automated",
+        "led","built","designed","developed","managed","delivered",
+        "improved","increased","reduced","launched","created","implemented",
+        "optimized","architected","spearheaded","drove","achieved","automated",
     ]
     verb_count = sum(1 for v in action_verbs if v in t)
     verbs_score = min(100, verb_count * 12)
-
     overall = int((contact_score + keywords_score + quant_score + structure_score + verbs_score) / 5)
-
     return {
         "overall": overall,
         "contact": contact_score,
@@ -293,7 +239,7 @@ STOP_WORDS = {
 }
 
 
-# ── Routes ───────────────────────────────────────────────────
+# ── Routes ──────────────────────────────────────────────────────
 
 @app.get("/health")
 async def health():
@@ -308,19 +254,11 @@ async def health():
 
 @app.get("/ping")
 async def ping():
-    """Lightweight keepalive — no tracking overhead."""
     return {"pong": True}
 
 
 @app.get("/api/analytics")
 async def analytics_summary():
-    """
-    Admin endpoint — returns usage stats.
-    Protected by a simple env-var secret: ?secret=YOUR_SECRET
-    Set ANALYTICS_SECRET in Render environment variables.
-    """
-    from fastapi import Request
-    secret = os.environ.get("ANALYTICS_SECRET", "")
     daily_plain = {k: dict(v) for k, v in _analytics["daily"].items()}
     return {
         "started_at":          _analytics["started_at"],
@@ -364,10 +302,8 @@ async def upload_resume(
     if not text:
         raise HTTPException(status_code=422, detail="PDF appears to be empty or image-only.")
 
-    # ── Clear previous session before creating a new one ──────────
     if prev_session_id:
         _clear_session(prev_session_id)
-    # Also clear any other lingering session (safety net)
     for old_sid in list(_active_session):
         _clear_session(old_sid)
 
@@ -380,7 +316,6 @@ async def upload_resume(
 
 @app.delete("/api/session/{sid}")
 async def delete_session(sid: str):
-    """Explicitly clear a session — called when user clicks Upload New Resume."""
     _clear_session(sid)
     return {"deleted": sid}
 
@@ -458,6 +393,7 @@ Return ONLY valid JSON, no markdown, no explanation, exactly this structure:
 Extract real bullet points from the resume for bullet_rewrites.
 For skill_gaps, list 6-8 skills the JD requires.
 Keep all text concise and actionable.
+BULLET REWRITE RULES: Each rewritten bullet must be ≤22 words, start with an action verb, include a metric.
 
 RESUME:
 {text[:3000]}
@@ -466,12 +402,7 @@ JOB DESCRIPTION:
 {jd[:2000]}"""
 
     raw = ask_ai(prompt)
-
     try:
-        clean = raw.strip()
-        if clean.startswith("```"):
-            clean = re.sub(r"^```[a-z]*\n?", "", clean)
-            clean = re.sub(r"\n?```$", "", clean)
         result = _extract_json(raw)
         track("ai_suggest", {"sid": sid})
         return result
@@ -544,10 +475,6 @@ RESUME:
 
     raw = ask_ai(prompt)
     try:
-        clean = raw.strip()
-        if clean.startswith("```"):
-            clean = re.sub(r"^```[a-z]*\n?", "", clean)
-            clean = re.sub(r"\n?```$", "", clean)
         result = _extract_json(raw)
         track("linkedin", {"sid": sid})
         return result
@@ -557,11 +484,6 @@ RESUME:
 
 @app.get("/api/extract-resume/{sid}")
 async def extract_resume(sid: str):
-    """
-    Parse the uploaded resume into structured JSON for the Resume Builder.
-    Uses a deterministic Python parser — zero AI calls, zero hallucination.
-    Falls back to AI only if the deterministic parser itself crashes.
-    """
     if sid not in _sessions:
         raise HTTPException(status_code=404, detail="Session not found — please re-upload your resume.")
 
@@ -569,7 +491,6 @@ async def extract_resume(sid: str):
     if not text or len(text.strip()) < 50:
         raise HTTPException(status_code=400, detail="No resume text found in session.")
 
-    # ── Primary: deterministic parser ──────────────────────────────
     try:
         from resume_parser import parse_resume
         data = parse_resume(text)
@@ -580,7 +501,6 @@ async def extract_resume(sid: str):
         traceback.print_exc()
         track("builder_fill_fallback", {"sid": sid, "error": str(exc)[:100]})
 
-    # ── Fallback: AI parser ─────────────────────────────────────────
     try:
         from ai_client import ask_ai
         prompt = (
@@ -595,6 +515,7 @@ async def extract_resume(sid: str):
             '  "projects": [],\n'
             '  "certifications": [{"name":"","issuer":"","year":""}]\n'
             "}\n\n"
+            "CRITICAL: preserve the candidate's name EXACTLY as written — do not reformat, abbreviate, or change capitalisation.\n"
             f"RESUME TEXT:\n{text[:5000]}"
         )
         raw = ask_ai(prompt)
@@ -608,48 +529,53 @@ async def extract_resume(sid: str):
 async def ai_resume_assist(payload: dict):
     """
     AI assistant for the Resume Builder.
-    Actions:
-      improve_text   — rewrite existing text to be sharper
-      generate_section — generate content from profile context
-      suggest_bullets  — generate bullets for an experience entry
-      tailor_resume  — rewrite text to match a job description
+    IMPROVED PROMPTS:
+    - Enforce ≤22 word bullet limit
+    - Never include role title inside bullets
+    - Preserve name exactly (no reformatting)
+    - Clean ATS-safe output (no emoji, no broken parens)
     """
     from ai_client import ask_ai
 
     action       = payload.get("action", "")
-    context      = payload.get("context", "")      # current text / profile context
-    section_type = payload.get("section_type", "")  # summary | skills | exp_description
-    extra        = payload.get("extra", "")         # JD text or skills list
+    context      = payload.get("context", "")
+    section_type = payload.get("section_type", "")
+    extra        = payload.get("extra", "")
 
     if not action:
         raise HTTPException(status_code=400, detail="action is required")
 
-    # ── improve_text ─────────────────────────────────────────────
+    # ── improve_text ──────────────────────────────────────────────
     if action == "improve_text":
         if section_type == "summary":
-            prompt = f"""You are an expert resume writer. Rewrite this professional summary as exactly 4–5 sharp bullet points.
+            prompt = f"""You are an expert resume writer. Rewrite this professional summary as exactly 4-5 sharp bullet points.
 
 Original text:
 {context}
 
-Rules:
+STRICT RULES:
 - Output ONLY bullet lines, one per line, each starting with •
-- Each bullet = one strong, focused idea (credential, domain, skill, or achievement)
-- Each bullet must fit in 1–2 lines (max ~25 words)
-- Start each bullet with a bold keyword or credential where natural (e.g. "PMP/CAPM certified", "8+ years", "Proven in")
-- No paragraph prose — bullets only
+- Each bullet = one distinct credential, domain expertise, or achievement
+- Each bullet MUST be ≤22 words — cut ruthlessly, keep only the strongest words
+- Start with a bold keyword or credential (e.g. "PMP/CAPM certified", "8+ years", "Proven in")
+- NO paragraph prose
+- NO generic filler: "responsible for", "worked on", "helped with", "passionate about"
+- DO NOT invent facts — only use information present in the original text
 - Exactly 4 or 5 bullets, never more
 
-Return ONLY the bullet lines, nothing else."""
+Return ONLY the bullet lines starting with •, nothing else."""
         else:
-            prompt = f"""You are an expert resume writer. Rewrite the following {section_type or 'resume'} text to be:
-- More impactful and results-focused
-- Concise (same length or shorter)
-- Professional and ATS-friendly
-- Free of passive voice where possible
+            prompt = f"""You are an expert resume writer. Rewrite the following {section_type or 'resume'} text to be more impactful.
 
 Original:
 {context}
+
+RULES:
+- More results-focused and concise (same length or shorter)
+- Professional and ATS-friendly (no emoji, no symbols except • for bullets)
+- Each bullet ≤22 words if bullet format
+- Start bullets with strong past-tense action verbs
+- Remove passive voice
 
 Return ONLY the improved text, no explanation, no quotes."""
         result = ask_ai(prompt)
@@ -663,25 +589,42 @@ Return ONLY the improved text, no explanation, no quotes."""
 
 Key skills / domain: {extra or 'not specified'}
 
-Rules:
-- Output ONLY bullet lines, one per line, each starting with •
-- Bullet 1: Title + certification + years of experience (the hook)
-- Bullet 2: Core technical domain and depth (embedded, wireless, automation, etc.)
-- Bullet 3: Program/project management strength or methodology
-- Bullet 4: A unique differentiator, GenAI capability, or key achievement
-- Each bullet must fit in 1–2 lines (max ~25 words)
-- No paragraph prose — bullets only
-- Exactly 4 bullets
+STRICT RULES:
+- Output ONLY 4 bullet lines, one per line, each starting with •
+- Bullet 1: Title + certification + years of experience (the hook) — ≤20 words
+- Bullet 2: Core technical domain and depth — ≤20 words
+- Bullet 3: Program/project management strength or methodology — ≤20 words
+- Bullet 4: A unique differentiator, GenAI capability, or key achievement — ≤20 words
+- NO paragraph prose — bullets only
+- NO generic phrases
 
-Return ONLY the bullet lines, nothing else."""
+Return ONLY the 4 bullet lines, nothing else."""
             result = ask_ai(prompt)
             return {"content": result.strip()}
 
         elif section_type == "skills":
-            prompt = f"""Based on this professional profile, suggest 12-15 technical skills:
+            prompt = f"""Based on this professional profile, suggest 12-15 technical skills as a clean comma-separated list:
 {context}
 
-Return ONLY a comma-separated list of skills, no explanation."""
+RULES:
+- Return ONLY comma-separated skill names
+- No descriptions, no bullets, no parentheses, no emoji
+- ATS-safe: plain text only
+
+Return ONLY the comma-separated list."""
+            result = ask_ai(prompt)
+            return {"content": result.strip()}
+
+        elif section_type == "achievements":
+            prompt = f"""Suggest 4-5 professional achievement bullets for this profile:
+{context}
+
+STRICT RULES:
+- Each achievement MUST be ≤20 words
+- Start with a strong action verb or result noun
+- Include a specific metric where plausible
+- No emoji, no parentheses artifacts, ATS-safe
+- Return ONLY bullet lines starting with •"""
             result = ask_ai(prompt)
             return {"content": result.strip()}
 
@@ -695,18 +638,23 @@ Return ONLY a comma-separated list of skills, no explanation."""
         prompt = f"""Write 5 strong resume bullet points for:
 Role: {role}
 Company: {company}
+{('Additional context: ' + extra) if extra else ''}
 
-Each bullet must:
-- Start with a past-tense action verb (Led, Built, Designed, Implemented, etc.)
-- Include a specific metric or outcome where plausible
-- Be under 20 words
-- Be ATS-friendly
+STRICT RULES — these are non-negotiable:
+- Each bullet MUST be ≤22 words — count every word
+- Start with a PAST-TENSE action verb (Led, Built, Designed, Implemented, Optimized, Delivered, etc.)
+- Include a specific metric or outcome where plausible (%, time saved, team size, cost, revenue)
+- ATS-safe: no emoji, no symbols except plain text
+- Do NOT include the job title "{role}" or company name "{company}" inside any bullet text
+- Do NOT start bullets with "•" or "-" — return clean text only, the caller adds the bullet
 
 Return ONLY valid JSON: {{"bullets": ["bullet 1", "bullet 2", "bullet 3", "bullet 4", "bullet 5"]}}"""
         raw = ask_ai(prompt)
         try:
             d = _extract_json(raw)
-            return {"bullets": d.get("bullets", [])}
+            # Post-process: strip any bullet chars the AI added anyway
+            bullets = [b.lstrip('•-* ').strip() for b in d.get("bullets", [])]
+            return {"bullets": bullets}
         except Exception:
             return {"bullets": []}
 
@@ -718,7 +666,7 @@ Return ONLY valid JSON: {{"bullets": ["bullet 1", "bullet 2", "bullet 3", "bulle
         is_summary = section_type == "summary" or context.strip().startswith("•")
 
         if is_summary:
-            prompt = f"""You are an expert resume writer. Tailor this professional summary to better match the job description below.
+            prompt = f"""You are an expert resume writer. Tailor this professional summary to match the job description below.
 
 Current summary (bullet format):
 {context}
@@ -726,18 +674,18 @@ Current summary (bullet format):
 Job Description:
 {extra[:2000]}
 
-Rules:
+STRICT RULES:
 - Output ONLY bullet lines, one per line, each starting with •
-- Keep the same factual content — do NOT invent new experiences or credentials
-- Naturally weave in 2–3 relevant keywords from the JD into the existing bullets
-- Keep each bullet to 1–2 lines (max ~25 words)
+- Keep the same factual content — DO NOT invent new experiences or credentials
+- Naturally weave in 2-3 relevant keywords from the JD into the existing bullets
+- Each bullet MUST be ≤22 words
 - Exactly 4 or 5 bullets, never more
-- No paragraph prose — bullets only
+- No paragraph prose
 
 Return ONLY valid JSON:
 {{"tailored": "• bullet 1\\n• bullet 2\\n• bullet 3\\n• bullet 4", "keywords_added": ["keyword1", "keyword2"]}}"""
         else:
-            prompt = f"""You are an expert resume writer. Tailor this resume {section_type or 'section'} to better match the job description below.
+            prompt = f"""Tailor this resume {section_type or 'section'} to better match the job description.
 
 Current text:
 {context}
@@ -745,11 +693,11 @@ Current text:
 Job Description:
 {extra[:2000]}
 
-Requirements:
+RULES:
 - Keep the same factual content (don't invent new experiences)
 - Naturally incorporate relevant keywords from the JD
-- Improve phrasing to match the role's language
-- Keep approximately the same length
+- Each bullet ≤22 words if bullet format
+- ATS-safe output (no emoji, no broken parentheses)
 
 Return ONLY valid JSON:
 {{"tailored": "the rewritten text here", "keywords_added": ["keyword1", "keyword2"]}}"""
@@ -761,16 +709,16 @@ Return ONLY valid JSON:
         except Exception:
             return {"tailored": context, "keywords_added": []}
 
+    # ── generate_cover_letter ─────────────────────────────────────
+    if action == "generate_cover_letter":
+        result = ask_ai(context)  # context already contains the full structured prompt
+        return {"content": result.strip()}
+
     raise HTTPException(status_code=400, detail=f"Unknown action: {action}")
 
 
 @app.post("/api/fill-bullets")
 async def fill_bullets(payload: dict):
-    """
-    Given a job role and existing bullets, AI-generate enough to reach exactly 5.
-    payload = { sid, role, company, start, end, existing_bullets: [] }
-    Returns { bullets: [...exactly 5...] }
-    """
     from ai_client import ask_ai
 
     role     = payload.get("role", "")
@@ -782,7 +730,6 @@ async def fill_bullets(payload: dict):
     if not role:
         raise HTTPException(status_code=400, detail="role is required")
 
-    # Already has 5+, just return trimmed
     if len(existing) >= 5:
         return {"bullets": existing[:5]}
 
@@ -793,16 +740,19 @@ async def fill_bullets(payload: dict):
 
 Job: {role} at {company} ({start} – {end})
 
-Existing bullets (already written — do NOT repeat these):
+Existing bullets (already written — do NOT repeat or paraphrase these):
 {existing_text}
 
 Write exactly {needed} NEW, UNIQUE bullet point(s) for this role.
-Each bullet must:
-- Start with a strong past-tense action verb
+
+STRICT RULES:
+- Each bullet MUST be ≤22 words — count every word
+- Start with a strong PAST-TENSE action verb
 - Be specific to the role/company context
 - Include a metric or quantifiable result where plausible (%, time, team size)
-- Be under 25 words
-- NOT duplicate any existing bullet above
+- Do NOT include the job title "{role}" or company "{company}" inside bullet text
+- Do NOT start bullets with "•" or "-" — return clean text only
+- Do NOT duplicate any existing bullet above
 
 Return ONLY valid JSON, no markdown:
 {{"new_bullets": ["bullet 1", "bullet 2", ...]}}
@@ -812,7 +762,7 @@ Generate exactly {needed} bullet(s)."""
     raw = ask_ai(prompt)
     try:
         d = _extract_json(raw)
-        new_b = d.get("new_bullets", [])
+        new_b = [b.lstrip('•-* ').strip() for b in d.get("new_bullets", [])]
         combined = existing + new_b
         return {"bullets": combined[:5]}
     except Exception:
@@ -821,7 +771,6 @@ Generate exactly {needed} bullet(s)."""
 
 @app.post("/api/track-export/{sid}")
 async def track_export(sid: str):
-    """Called from frontend when user triggers PDF export."""
     track("pdf_export", {"sid": sid})
     return {"ok": True}
 

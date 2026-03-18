@@ -1049,6 +1049,9 @@
                 <button class="rb-preview-toggle" style="font-size:.62rem;" onclick="rbExportTXT()" title="Download as plain text">↓ .txt</button>
               </div>
 
+              <!-- Resume QA Panel -->
+              <div id="rb-qa-panel" style="background:var(--surface);border:1px solid rgba(255,109,53,.3);border-radius:var(--radius-sm);margin-bottom:12px;overflow:hidden;min-height:36px;"></div>
+
               <!-- Autofill status banner -->
               <div id="rb-fill-banner" style="display:none;align-items:center;gap:12px;background:var(--purple-dim);border:1px solid rgba(180,124,255,.25);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;">
                 <div style="width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--purple);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;"></div>
@@ -2233,6 +2236,7 @@ function rbSync() {
 
   rbUpdateSectionStatus();
   rbRenderPreview();
+  rbRunQA();
 
   clearTimeout(rbAtsTimer);
   rbAtsTimer = setTimeout(rbUpdateATS, 600);
@@ -2624,6 +2628,17 @@ function rbAddRef(data) {
 function rbAddBullet(listId, text) {
   const list = document.getElementById(listId);
   if (!list) return;
+  // Detect if text looks like a job title accidentally added as bullet
+  // (short, title-cased, no verb, no number) — warn the user
+  if (text && text.trim().length > 0) {
+    const w = text.trim().split(/\s+/);
+    const looksLikeTitle = w.length <= 6 && w.length >= 2 &&
+      w.every(wrd => !wrd || wrd[0] === wrd[0].toUpperCase() || ['/', '&', '-'].includes(wrd)) &&
+      !/\d/.test(text) && !/^(led|built|managed|designed|developed|created|implemented|owned|drove|achieved)/i.test(text.trim());
+    if (looksLikeTitle && text.trim().length > 5) {
+      console.warn('[CareerScope QA] Bullet may be a job title:', text.trim());
+    }
+  }
   const row = document.createElement('div');
   row.className = 'rb-bullet-row';
   row.innerHTML = `
@@ -2884,7 +2899,8 @@ async function rbAI(action) {
     try {
       const r = await fetch('/api/ai-resume-assist', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ action:'improve_text', context:bullets.join('\n'), section_type:'summary' })
+        body: JSON.stringify({ action:'improve_text', context:bullets.join('\n'), section_type:'summary',
+          extra:'RULES: Each bullet max 22 words. Start with strong noun/credential. No generic phrases. Return ONLY bullet lines starting with •' })
       });
       const d = await r.json();
       if (d.improved) {
@@ -2964,7 +2980,8 @@ async function rbAIExpSuggest(idx) {
   try {
     const r = await fetch('/api/ai-resume-assist', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ action:'suggest_bullets', context:role, extra:rbVal(`rb-exp-company-${idx}`) })
+      body: JSON.stringify({ action:'suggest_bullets', context:role, extra:rbVal(`rb-exp-company-${idx}`),
+          rules:'Each bullet: max 22 words, strong past-tense verb, specific metric. Never include job title or company name inside the bullet.' })
     });
     const d = await r.json();
     const bullets = d.bullets?.length ? d.bullets
@@ -3063,7 +3080,23 @@ function rbInsertBullet(listId, el) {
   showToast('Bullet added ✓');
 }
 
-// ── FONT SELECTOR ────────────────────────────────────────────
+// ── NAME NORMALIZER ──────────────────────────────────────────
+// Fixes dropped capitals like "iruvallur" → "Thiruvallur" is not
+// possible to recover (we don't know what was dropped), but we can
+// ensure each word is properly Title-cased as a minimum safeguard.
+function _rbNormalizeName(name) {
+  if (!name) return name;
+  return name.split(/\s+/).map(word => {
+    if (!word) return word;
+    // If word starts with lowercase and isn't a connector, title-case it
+    if (word[0] === word[0].toLowerCase() && /^[a-z]/i.test(word[0])) {
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    }
+    return word;
+  }).join(' ');
+}
+
+// ── FONT SELECTOR ──────────────────────────────────────────────
 function rbSetFont(v) {
   rbState.font = v;
   rbSync();
@@ -3093,7 +3126,7 @@ async function clGenerate() {
   out.classList.add('hidden');
 
   // Build context from rbState or session
-  const name   = rbState.personal.name  || 'the applicant';
+  const name   = _rbNormalizeName(rbState.personal.name) || 'the applicant';
   const title  = rbState.personal.title || '';
   const sumBuls = rbState.summary.length ? rbState.summary.join('\n• ') : '';
   const expSnippet = rbState.experience.slice(0,3).map(e =>
@@ -3337,15 +3370,17 @@ function rbRenderTPM() {
   const E  = rbE;
 
   // Contact: line 1 = location | email | phone  /  line 2 = linkedin | portfolio
+  // Skip raw placeholder values like "LinkedIn", "GitHub", "N/A" etc.
+  const _isPH = (v) => !v || /^(linkedin|github|n\/a|your[- ]|http$|www$|link$|github$|portfolio$|website$)/i.test(v.trim());
   const cLine1 = [
     p.location && '<span>📍 ' + E(p.location) + '</span>',
     p.email    && '<span>✉ '  + E(p.email)    + '</span>',
     p.phone    && '<span>✆ '  + E(p.phone)    + '</span>',
   ].filter(Boolean).join('<span style="margin:0 6px;color:#888;"> || </span>');
   const cLine2 = [
-    p.linkedin  && '<span>🔗 ' + E(p.linkedin)  + '</span>',
-    p.portfolio && '<span>🔗 ' + E(p.portfolio) + '</span>',
-    p.website   && '<span>🌐 ' + E(p.website)   + '</span>',
+    !_isPH(p.linkedin)  && '<span>🔗 ' + E(p.linkedin)  + '</span>',
+    !_isPH(p.portfolio) && '<span>🔗 ' + E(p.portfolio) + '</span>',
+    !_isPH(p.website)   && '<span>🌐 ' + E(p.website)   + '</span>',
   ].filter(Boolean).join('<span style="margin:0 6px;color:#888;"> || </span>');
   const contactBlock =
     (cLine1 ? '<div style="font-family:Arial,sans-serif;font-size:' + (9.5*sc) + 'px;color:#333;line-height:1.55;">' + cLine1 + '</div>' : '') +
@@ -3378,11 +3413,14 @@ function rbRenderTPM() {
     ? '<div style="font-family:Georgia,\'Times New Roman\',serif;font-style:italic;font-size:' + (9*sc) + 'px;color:#444;margin-bottom:' + (3*sc) + 'px;padding-left:' + (5*sc) + 'px;">' + E(domain) + '</div>'
     : '';
 
-  const bul = (text) =>
-    '<div style="display:flex;gap:' + (4*sc) + 'px;margin-bottom:' + (2*sc) + 'px;padding-left:' + (2*sc) + 'px;">' +
+  const bul = (text) => {
+    // Sanitize: strip any leading bullet chars the AI may have prepended, ensure clean text
+    const cleanText = text.replace(/^[•\-\*\u25b8\s]+/, '').trim();
+    return '<div style="display:flex;gap:' + (4*sc) + 'px;margin-bottom:' + (2*sc) + 'px;padding-left:' + (2*sc) + 'px;">' +
       '<span style="font-family:Arial,sans-serif;font-size:' + (9.5*sc) + 'px;flex-shrink:0;color:#111;">•</span>' +
-      '<span style="font-family:Arial,sans-serif;font-size:' + (9.5*sc) + 'px;color:#111;line-height:1.35;">' + E(text) + '</span>' +
+      '<span style="font-family:Arial,sans-serif;font-size:' + (9.5*sc) + 'px;color:#111;line-height:1.35;">' + E(cleanText) + '</span>' +
     '</div>';
+  };
 
   // Summary
   const sumBuls = rbState.summary.filter(b => b.trim());
@@ -3431,8 +3469,18 @@ function rbRenderTPM() {
   ].filter(Boolean);
   const skillsHtml = skillCats.length
     ? secHdr('SKILLS') + skillCats.map(cat => {
-        const items    = cat.items.split(',').map(s => s.trim()).filter(Boolean);
-        const itemsStr = items.join(' • ');
+        // Sanitize: remove unclosed parens, strip leading bullets, normalize separators
+        const rawItems = cat.items
+          .replace(/[•·]/g, ',')          // normalize inline bullet separators to comma
+          .split(',')
+          .map(s => s.trim()
+            .replace(/^[•\-\*\s]+/, '')   // strip leading bullet chars
+            .replace(/\)+$/, '')          // strip trailing closing parens artifact e.g. "Design)"
+            .replace(/\.$/, '')           // strip trailing periods
+            .trim())
+          .filter(s => s.length > 1);
+        if (!rawItems.length) return '';
+        const itemsStr = rawItems.join(' • ');
         return '<div style="display:flex;gap:' + (4*sc) + 'px;margin-bottom:' + (2.5*sc) + 'px;padding-left:' + (2*sc) + 'px;">' +
           '<span style="font-family:Arial,sans-serif;font-size:' + (9.5*sc) + 'px;flex-shrink:0;color:#111;">•</span>' +
           '<span style="font-family:Arial,sans-serif;font-size:' + (9.5*sc) + 'px;color:#111;line-height:1.35;"><strong>' + E(cat.label) + ':</strong> ' + E(itemsStr) + '</span>' +
@@ -3522,7 +3570,7 @@ function rbRenderTPM() {
 
   return '<div style="font-family:' + fontCss + ';font-size:' + (9.5*sc) + 'px;color:#111;background:white;padding:' + (15*sc) + 'px ' + (14*sc) + 'px ' + (15*sc) + 'px ' + (14*sc) + 'px;min-height:100%;">' +
     '<div style="text-align:center;margin-bottom:' + (7*sc) + 'px;">' +
-      '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:' + (20*sc) + 'px;font-weight:700;letter-spacing:1px;color:#0a0a0a;line-height:1.1;margin-bottom:' + (2*sc) + 'px;">' + E(p.name || 'YOUR NAME') + '</div>' +
+      '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:' + (20*sc) + 'px;font-weight:700;letter-spacing:1px;color:#0a0a0a;line-height:1.1;margin-bottom:' + (2*sc) + 'px;">' + E(_rbNormalizeName(p.name) || 'YOUR NAME') + '</div>' +
       (p.title ? '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:' + (11*sc) + 'px;font-weight:700;color:#222;margin-bottom:' + (2*sc) + 'px;">' + E(p.title) + '</div>' : '') +
       contactBlock +
     '</div>' +
@@ -3585,6 +3633,157 @@ function rbRenderMinimal() {
   </div>`;
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  RESUME QA ENGINE — runs on every sync, warns before export
+// ═══════════════════════════════════════════════════════════════
+
+const rbQA = {
+  issues: [],
+  timer:  null,
+};
+
+function rbRunQA() {
+  clearTimeout(rbQA.timer);
+  rbQA.timer = setTimeout(_rbRunQANow, 800);
+}
+
+function _rbRunQANow() {
+  const issues = [];
+  const p = rbState;
+
+  // ── 1. Name check ────────────────────────────────────────────
+  const name = p.personal.name || '';
+  if (name) {
+    // Detect dropped capitals mid-word: "iruvallur" vs "Thiruvallur"
+    const words = name.split(/\s+/);
+    words.forEach(w => {
+      if (w.length > 1 && w[0] === w[0].toLowerCase() && w[0].match(/[a-z]/)) {
+        issues.push({ type:'name', sev:'error',
+          msg: `Name word "${w}" starts with lowercase — check for dropped capital letter.` });
+      }
+    });
+    if (name.length < 4)
+      issues.push({ type:'name', sev:'error', msg: 'Name seems too short — please verify.' });
+  }
+
+  // ── 2. Placeholder link detection ────────────────────────────
+  const _isPlaceholder = (v) => v && /^(linkedin|github|n\/a|your[- ]|http$|www$|link$|github$|portfolio$|website$)/i.test(v.trim());
+  if (_isPlaceholder(p.personal.linkedin))
+    issues.push({ type:'contact', sev:'warn',
+      msg: '🔗 LinkedIn field contains a placeholder — enter your actual profile URL.' });
+  if (_isPlaceholder(p.personal.portfolio))
+    issues.push({ type:'contact', sev:'warn',
+      msg: '🔗 GitHub/Portfolio field contains a placeholder — enter your actual URL.' });
+
+  // ── 3. Bullet quality checks ──────────────────────────────────
+  const ACTION_VERBS = ['led','built','designed','developed','managed','delivered',
+    'improved','increased','reduced','launched','created','implemented','optimized',
+    'architected','drove','achieved','automated','deployed','negotiated','established',
+    'spearheaded','initiated','coordinated','facilitated','streamlined','generated'];
+
+  let longBullets = 0, noVerbBullets = 0, noMetricBullets = 0;
+
+  const allBullets = [
+    ...p.summary,
+    ...p.experience.flatMap(e => e.bullets),
+    ...p.projects.flatMap(pj => pj.bullets),
+  ];
+
+  allBullets.forEach(b => {
+    const clean = b.replace(/^[•\-\*\s]+/, '').trim();
+    const words = clean.split(/\s+/).filter(Boolean);
+    if (words.length > 22) longBullets++;
+    const firstWord = words[0]?.toLowerCase() || '';
+    if (!ACTION_VERBS.includes(firstWord)) noVerbBullets++;
+    if (!/\d/.test(clean)) noMetricBullets++;
+  });
+
+  if (longBullets > 0)
+    issues.push({ type:'bullet', sev:'warn',
+      msg: `⚠ ${longBullets} bullet${longBullets > 1 ? 's exceed' : ' exceeds'} 22 words — trim for impact.` });
+  if (noVerbBullets > Math.floor(allBullets.length * 0.4) && allBullets.length > 2)
+    issues.push({ type:'bullet', sev:'info',
+      msg: `💡 ${noVerbBullets}/${allBullets.length} bullets don't start with a strong action verb.` });
+  if (noMetricBullets > Math.floor(allBullets.length * 0.6) && allBullets.length > 3)
+    issues.push({ type:'bullet', sev:'info',
+      msg: `💡 Most bullets lack measurable outcomes (numbers/%). Add metrics for stronger impact.` });
+
+  // ── 4. ATS symbol check ───────────────────────────────────────
+  const contactStr = [p.personal.location, p.personal.email, p.personal.phone,
+                      p.personal.linkedin, p.personal.portfolio].join(' ');
+  if (/[📍✉✆🔗🌐]/.test(contactStr))
+    issues.push({ type:'ats', sev:'info',
+      msg: '📋 Contact line has emoji — these are stripped in PDF export for ATS compatibility.' });
+
+  // ── 5. Section completeness ───────────────────────────────────
+  if (!p.personal.name)
+    issues.push({ type:'missing', sev:'error', msg: '⚠ Full name is missing.' });
+  if (!p.personal.email)
+    issues.push({ type:'missing', sev:'warn', msg: '⚠ Email address is missing.' });
+  if (!p.experience.some(e => e.role && e.company))
+    issues.push({ type:'missing', sev:'warn', msg: '⚠ No experience entries have both role and company.' });
+
+  // ── 6. Role-before-bullets check ─────────────────────────────
+  p.experience.forEach((e, i) => {
+    if (e.company && !e.role)
+      issues.push({ type:'structure', sev:'error',
+        msg: `⚠ Experience entry ${i+1} (${e.company}) is missing a job title.` });
+    if (e.role && !e.company)
+      issues.push({ type:'structure', sev:'error',
+        msg: `⚠ Experience entry "${e.role}" is missing a company name.` });
+    if (e.bullets.some(b => b.toLowerCase().includes(e.role?.toLowerCase()) && b.length < 60 && e.role))
+      issues.push({ type:'structure', sev:'warn',
+        msg: `⚠ "${e.role}" — a bullet may contain the job title. The AI may have duplicated it.` });
+  });
+
+  rbQA.issues = issues;
+  _rbRenderQAPanel();
+}
+
+function rbQAToggle(el) {
+  const body = el.nextElementSibling;
+  if (!body) return;
+  body.classList.toggle('collapsed');
+  // Update chevron text
+  const chevron = el.querySelector('.rb-qa-chevron');
+  if (chevron) chevron.textContent = body.classList.contains('collapsed') ? '▾' : '▴';
+}
+
+function _rbRenderQAPanel() {
+  const panel = document.getElementById('rb-qa-panel');
+  if (!panel) return;
+  const issues = rbQA.issues;
+
+  if (!issues.length) {
+    panel.innerHTML = '<div style="color:var(--green);font-family:var(--fm);font-size:.68rem;padding:8px 12px;">✓ No issues detected</div>';
+    panel.style.borderColor = 'rgba(0,230,118,.3)';
+    return;
+  }
+
+  const errors = issues.filter(i => i.sev === 'error');
+  const warns  = issues.filter(i => i.sev === 'warn');
+  const infos  = issues.filter(i => i.sev === 'info');
+
+  const color = errors.length ? 'var(--red)' : warns.length ? 'var(--orange)' : 'var(--yellow)';
+  panel.style.borderColor = errors.length ? 'rgba(255,77,109,.4)' : warns.length ? 'rgba(255,109,53,.4)' : 'rgba(255,214,10,.3)';
+
+  panel.innerHTML =
+    '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="rbQAToggle(this)">' +
+      '<span style="font-family:var(--fm);font-size:.65rem;color:' + color + ';">' +
+        (errors.length ? '✗ ' + errors.length + ' error' + (errors.length>1?'s':'') : '') +
+        (warns.length  ? (errors.length?' · ':'') + '⚠ ' + warns.length + ' warning' + (warns.length>1?'s':'') : '') +
+        (infos.length  ? ((errors.length||warns.length)?' · ':'') + '💡 ' + infos.length + ' suggestion' + (infos.length>1?'s':'') : '') +
+      '</span>' +
+      '<span class="rb-qa-chevron" style="font-family:var(--fm);font-size:.6rem;color:var(--text-muted);margin-left:auto;">▾</span>' +
+    '</div>' +
+    '<div class="collapsed" style="padding:6px 0;">' +
+      issues.map(iss => {
+        const c = iss.sev === 'error' ? 'var(--red)' : iss.sev === 'warn' ? 'var(--orange)' : 'var(--yellow)';
+        return '<div style="padding:5px 12px;font-family:var(--fb);font-size:.78rem;color:var(--text-sub);line-height:1.5;border-left:2px solid ' + c + ';margin:2px 8px;">' + iss.msg + '</div>';
+      }).join('') +
+    '</div>';
+}
+
 // CHANGE 6: rbExportPDF — full replacement with TPM-specific pt-unit A4 export
 function rbExportPDF() {
   if (sessionId) fetch(`/api/track-export/${sessionId}`, {method:'POST'}).catch(()=>{});
@@ -3593,6 +3792,14 @@ function rbExportPDF() {
   const p = rbState.personal;
   if (!p.name && !rbState.summary.length && !rbState.experience.some(e=>e.role)) {
     showToast('Fill in your resume first', true); return;
+  }
+
+  // Run QA synchronously before export
+  _rbRunQANow();
+  const hardErrors = rbQA.issues.filter(i => i.sev === 'error');
+  if (hardErrors.length) {
+    const errMsgs = hardErrors.map(e => e.msg).join('\n');
+    if (!confirm('Resume has ' + hardErrors.length + ' error(s) that may affect output:\n\n' + errMsgs + '\n\nExport anyway?')) return;
   }
 
   const sc  = RB_SPACING[rbState.spacing] || 1;
@@ -3604,19 +3811,26 @@ function rbExportPDF() {
 
   if (tpl === 'tpm') {
     // ── TPM Pro: pixel-perfect A4 with pt units, @page margin:0 kills browser header/footer ──
+    // ATS mode: no emoji icons, skip raw placeholders like "LinkedIn", "GitHub", "N/A"
+    const _isPlaceholder = (v) => !v || /^(linkedin|github|n\/a|your[- ]|http$|www$|link$|github$|portfolio$|website$)/i.test(v.trim());
+    const _fmtLink = (v) => {
+      if (_isPlaceholder(v)) return null;
+      // Show just the domain/path, no protocol noise
+      return E(v.replace(/^https?:\/\/(www\.)?/, ''));
+    };
     const eLine1 = [
-      p.location && '<span>📍 ' + E(p.location) + '</span>',
-      p.email    && '<span>✉ '  + E(p.email)    + '</span>',
-      p.phone    && '<span>✆ '  + E(p.phone)    + '</span>',
-    ].filter(Boolean).join('<span style="margin:0 6px;color:#888;"> || </span>');
+      p.location && E(p.location),
+      p.email    && E(p.email),
+      p.phone    && E(p.phone),
+    ].filter(Boolean).join(' | ');
     const eLine2 = [
-      p.linkedin  && '<span>🔗 ' + E(p.linkedin)  + '</span>',
-      p.portfolio && '<span>🔗 ' + E(p.portfolio) + '</span>',
-      p.website   && '<span>🌐 ' + E(p.website)   + '</span>',
+      _fmtLink(p.linkedin),
+      _fmtLink(p.portfolio),
+      _fmtLink(p.website),
     ].filter(Boolean).join('<span style="margin:0 6px;color:#888;"> || </span>');
     const eContactBlock =
       (eLine1 ? '<div style="font-family:Arial,sans-serif;font-size:9pt;color:#333;line-height:1.45;">' + eLine1 + '</div>' : '') +
-      (eLine2 ? '<div style="font-family:Arial,sans-serif;font-size:9pt;color:#333;line-height:1.45;">' + eLine2 + '</div>' : '');
+      (eLine2.filter(Boolean).length ? '<div style="font-family:Arial,sans-serif;font-size:9pt;color:#333;line-height:1.45;">' + eLine2.filter(Boolean).join(' | ') + '</div>' : '');
 
     const secHdr = (label) =>
       '<div style="margin-top:7pt;margin-bottom:2pt;page-break-after:avoid;">' +
@@ -3645,11 +3859,14 @@ function rbExportPDF() {
       ? '<div style="font-family:Georgia,\'Times New Roman\',serif;font-style:italic;font-size:9pt;color:#444;margin-bottom:2pt;padding-left:4pt;">' + E(d) + '</div>'
       : '';
 
-    const bulPt = (t) =>
-      '<div style="display:flex;gap:4pt;margin-bottom:1.5pt;padding-left:2pt;page-break-inside:avoid;">' +
+    const bulPt = (t) => {
+      // Strip any accidental leading bullet chars the AI may have prepended
+      const ct = t.replace(/^[•\-\*\u25b8\s]+/, '').trim();
+      return '<div style="display:flex;gap:4pt;margin-bottom:1.5pt;padding-left:2pt;page-break-inside:avoid;">' +
         '<span style="font-family:Arial,sans-serif;font-size:9.5pt;flex-shrink:0;color:#111;">•</span>' +
-        '<span style="font-family:Arial,sans-serif;font-size:9.5pt;color:#111;line-height:1.3;">' + E(t) + '</span>' +
+        '<span style="font-family:Arial,sans-serif;font-size:9.5pt;color:#111;line-height:1.3;">' + E(ct) + '</span>' +
       '</div>';
+    };
 
     const sumBuls = rbState.summary.filter(b=>b.trim());
     const sumPt   = sumBuls.length ? secHdr('SUMMARY') + sumBuls.map(bulPt).join('') : '';
@@ -3696,7 +3913,13 @@ function rbExportPDF() {
     ].filter(Boolean);
     const skillsPt = sCats.length
       ? secHdr('SKILLS') + sCats.map(cat => {
-          const itemsStr = cat.items.split(',').map(s=>s.trim()).filter(Boolean).join(' • ');
+          const rawItems = cat.items
+            .replace(/[•·]/g, ',')
+            .split(',')
+            .map(s => s.trim().replace(/^[•\-\*\s]+/, '').replace(/\)+$/, '').replace(/\.$/, '').trim())
+            .filter(s => s.length > 1);
+          if (!rawItems.length) return '';
+          const itemsStr = rawItems.join(' • ');
           return '<div style="display:flex;gap:4pt;margin-bottom:2.5pt;padding-left:2pt;page-break-inside:avoid;">' +
             '<span style="font-family:Arial,sans-serif;font-size:9.5pt;flex-shrink:0;color:#111;">•</span>' +
             '<span style="font-family:Arial,sans-serif;font-size:9.5pt;color:#111;line-height:1.35;"><strong>' + E(cat.label) + ':</strong> ' + E(itemsStr) + '</span>' +
@@ -3778,7 +4001,7 @@ function rbExportPDF() {
     bodyContent =
       '<div class="page">' +
         '<div style="text-align:center;margin-bottom:6pt;">' +
-          '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:20pt;font-weight:700;letter-spacing:1pt;color:#0a0a0a;line-height:1.1;margin-bottom:2pt;">' + E(p.name || 'YOUR NAME') + '</div>' +
+          '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:20pt;font-weight:700;letter-spacing:1pt;color:#0a0a0a;line-height:1.1;margin-bottom:2pt;">' + E(_rbNormalizeName(p.name || 'YOUR NAME')) + '</div>' +
           (p.title ? '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:11pt;font-weight:700;color:#222;margin-bottom:2pt;">' + E(p.title) + '</div>' : '') +
           eContactBlock +
         '</div>' +
