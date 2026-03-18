@@ -546,33 +546,105 @@
     .rb-add-entry-btn:hover { border-color:var(--green); color:var(--green); }
 
     /* Preview pane — paginated document viewer */
+    /* ── INLINE PREVIEW (right column, always visible) ── */
     .rb-preview-pane { position:sticky; top:0; background:var(--surface-2); border-radius:var(--radius); overflow:hidden; box-shadow:0 8px 40px rgba(0,0,0,.4); }
     .rb-preview-toolbar { background:var(--surface-2); border-bottom:1px solid var(--border); padding:10px 14px; display:flex; align-items:center; justify-content:space-between; }
-    .rb-preview-scroll { max-height:80vh; overflow-y:auto; background:#4a5568; padding:12px 8px; }
+    .rb-preview-scroll { max-height:80vh; overflow-y:auto; background:#2d3748; padding:12px 8px; }
     .rb-preview-scroll::-webkit-scrollbar { width:5px; }
     .rb-preview-scroll::-webkit-scrollbar-thumb { background:#666; border-radius:3px; }
+
+    /* ── FLOATING PREVIEW PANEL ── */
+    #rb-float-panel {
+      position: fixed;
+      top: 60px; right: 20px;
+      width: 460px;
+      max-height: calc(100vh - 80px);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: 0 20px 60px rgba(0,0,0,.6), 0 0 0 1px rgba(0,212,255,.08);
+      z-index: 8888;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+      transition: opacity .25s, transform .25s;
+    }
+    #rb-float-panel.hidden { opacity:0; pointer-events:none; transform:translateX(20px); }
+    .rb-float-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 14px;
+      display: flex; align-items: center; gap: 10px;
+      cursor: move; user-select: none; flex-shrink: 0;
+    }
+    .rb-float-title { font-family:var(--fm); font-size:.62rem; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-sub); flex:1; }
+    .rb-float-pages { font-family:var(--fm); font-size:.62rem; color:var(--accent); min-width:60px; text-align:right; }
+    .rb-float-close { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1rem; padding:2px 6px; line-height:1; transition:color .15s; }
+    .rb-float-close:hover { color:var(--text); }
+    .rb-float-scroll { flex:1; overflow-y:auto; background:#2d3748; padding:12px 8px; }
+    .rb-float-scroll::-webkit-scrollbar { width:4px; }
+    .rb-float-scroll::-webkit-scrollbar-thumb { background:#555; border-radius:2px; }
+    .rb-float-footer { background:var(--surface); border-top:1px solid var(--border); padding:8px 14px; display:flex; gap:8px; align-items:center; flex-shrink:0; }
+
+    /* Toggle preview button */
+    .rb-preview-toggle {
+      background: var(--accent-dim); color: var(--accent);
+      border: 1px solid rgba(0,212,255,.3); border-radius: var(--radius-sm);
+      padding: 6px 12px; font-family: var(--fm); font-size: .62rem;
+      cursor: pointer; transition: all .18s; white-space: nowrap; letter-spacing: .5px;
+    }
+    .rb-preview-toggle:hover { background: rgba(0,212,255,.15); }
+    .rb-preview-toggle.active { background: rgba(0,212,255,.18); box-shadow: 0 0 12px rgba(0,212,255,.2); }
+
     /* Each A4 page rendered as a white sheet with shadow */
     .rb-page-sheet {
       background: white;
-      width: 210mm;
-      min-height: 297mm;
-      max-width: 100%;
-      margin: 0 auto 12px auto;
-      box-shadow: 0 2px 12px rgba(0,0,0,.45);
+      width: 100%;
+      aspect-ratio: 210 / 297;
+      margin: 0 auto 10px auto;
+      box-shadow: 0 2px 16px rgba(0,0,0,.5);
       border-radius: 2px;
       overflow: hidden;
       position: relative;
     }
     .rb-page-sheet:last-child { margin-bottom: 0; }
-    /* Page number label */
     .rb-page-label {
-      text-align: center;
-      font-family: var(--fm);
-      font-size: .58rem;
-      color: #aaa;
-      letter-spacing: 1.5px;
-      padding: 5px 0 8px;
+      text-align: center; font-family: var(--fm);
+      font-size: .55rem; color: #9aabb8; letter-spacing: 1.5px; padding: 4px 0 6px;
     }
+    /* Spill warning overlay on page sheet */
+    .rb-spill-sheet-badge {
+      position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%);
+      background: rgba(255,109,53,.92); color: white;
+      font-family: var(--fm); font-size: .55rem; letter-spacing: .5px;
+      padding: 3px 10px; border-radius: 20px; pointer-events: none;
+      white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,.3); z-index: 2;
+    }
+
+    /* ── PAGE-SPILL WARNING on accordion entry card ── */
+    .rb-entry-card.spill-warn { border-color: var(--orange) !important; box-shadow: 0 0 0 2px rgba(255,109,53,.15); }
+    .rb-spill-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: var(--orange-dim); color: var(--orange);
+      border: 1px solid rgba(255,109,53,.3); border-radius: 20px;
+      font-family: var(--fm); font-size: .56rem; padding: 1px 7px; margin-left: 6px;
+      animation: spill-pulse 2.5s ease-in-out infinite; vertical-align: middle;
+    }
+    @keyframes spill-pulse { 0%,100%{opacity:1} 50%{opacity:.55} }
+
+    /* ── SPILL TOAST ── */
+    .rb-spill-toast {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+      background: #1a1200; border: 1px solid var(--orange); border-radius: var(--radius);
+      padding: 13px 16px; display: flex; align-items: flex-start; gap: 12px;
+      z-index: 9998; max-width: 480px; width: calc(100vw - 40px);
+      box-shadow: 0 8px 32px rgba(0,0,0,.55); animation: slideUp .3s ease;
+    }
+    .rb-spill-toast-icon { font-size: 1.1rem; flex-shrink:0; margin-top:1px; }
+    .rb-spill-toast-body { flex:1; }
+    .rb-spill-toast-title { font-weight:600; color:var(--orange); margin-bottom:3px; font-size:.84rem; }
+    .rb-spill-toast-msg { color:var(--text-sub); line-height:1.5; font-size:.79rem; }
+    .rb-spill-toast-close { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1rem; padding:0 0 0 8px; flex-shrink:0; align-self:center; }
+    .rb-spill-toast-close:hover { color:var(--text); }
 
     /* Undo banner */
     .rb-undo-bar { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:#1e293b; border:1px solid var(--border); border-radius:var(--radius); padding:10px 20px; display:flex; gap:14px; align-items:center; font-size:.8rem; color:var(--text); z-index:9999; box-shadow:0 4px 20px rgba(0,0,0,.4); }
@@ -660,6 +732,7 @@
       <button class="nav-btn" data-panel="linkedin"><span class="nav-icon">◈</span> LinkedIn</button>
       <button class="nav-btn" data-panel="guidance"><span class="nav-icon">◉</span> Guidance</button>
       <button class="nav-btn" data-panel="builder"><span class="nav-icon">✎</span> Build Resume</button>
+      <button class="nav-btn" data-panel="cover-letter"><span class="nav-icon">✉</span> Cover Letter</button>
 
       <div class="sidebar-footer">
         <button class="upload-new-btn" id="upload-new-btn">↑ Upload New Resume</button>
@@ -930,7 +1003,7 @@
 
           </div>
 
-          <!-- Accent + Spacing inline controls -->
+          <!-- Accent + Spacing + Font controls -->
           <div class="rb-controls-row">
             <div class="rb-ctrl-group">
               <span class="rb-ctrl-label">Accent</span>
@@ -943,6 +1016,16 @@
                 <button id="rb-sp-normal"   class="rb-density-btn active" onclick="rbSetSpacing('normal',this)">Normal</button>
                 <button id="rb-sp-spacious" class="rb-density-btn" onclick="rbSetSpacing('spacious',this)" title="2-page layout">Spacious</button>
               </div>
+            </div>
+            <div class="rb-ctrl-group">
+              <span class="rb-ctrl-label">Font</span>
+              <select id="rb-font-sel" class="rb-density-btn" style="padding:5px 10px;cursor:pointer;" onchange="rbSetFont(this.value)">
+                <option value="arial">Arial</option>
+                <option value="calibri">Calibri</option>
+                <option value="georgia">Georgia</option>
+                <option value="garamond">Garamond</option>
+                <option value="helvetica">Helvetica</option>
+              </select>
             </div>
           </div>
         </div>
@@ -961,7 +1044,9 @@
                   <div class="rb-ats-track"><div class="rb-ats-fill" id="rb-ats-fill"></div></div>
                   <span class="rb-ats-val" id="rb-ats-val">—</span>
                 </div>
+                <button class="rb-preview-toggle active" id="rb-preview-toggle-btn" onclick="rbToggleFloatPreview()" title="Toggle live preview panel">⊡ Preview</button>
                 <button class="btn btn-primary" style="padding:8px 18px;font-size:.82rem;" onclick="rbExportPDF()">↓ Export PDF</button>
+                <button class="rb-preview-toggle" style="font-size:.62rem;" onclick="rbExportTXT()" title="Download as plain text">↓ .txt</button>
               </div>
 
               <!-- Autofill status banner -->
@@ -1108,6 +1193,70 @@
                   </div>
                 </div>
 
+                <!-- Achievements -->
+                <div class="rb-sec" id="rbs-achievements">
+                  <div class="rb-sec-hdr" onclick="rbToggleSec('achievements')">
+                    <span class="rb-sec-icon">🏅</span>
+                    <span class="rb-sec-title">Achievements</span>
+                    <span class="rb-sec-status" id="rbs-achievements-status"></span>
+                    <span class="rb-sec-chevron">▾</span>
+                  </div>
+                  <div class="rb-sec-body collapsed" id="rbs-achievements-body">
+                    <p style="font-size:.76rem;color:var(--text-muted);margin-bottom:10px;padding:0 2px;">Awards, honours, recognitions and notable accomplishments.</p>
+                    <div id="rb-ach-list"></div>
+                    <button class="rb-add-bullet-btn" onclick="rbAddAchBullet('')">+ Add Achievement</button>
+                    <div class="rb-ai-row">
+                      <button class="rb-ai-btn" onclick="rbAI('ach_generate')">✦ AI Suggest</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Languages -->
+                <div class="rb-sec" id="rbs-languages">
+                  <div class="rb-sec-hdr" onclick="rbToggleSec('languages')">
+                    <span class="rb-sec-icon">🌐</span>
+                    <span class="rb-sec-title">Languages</span>
+                    <span class="rb-sec-status" id="rbs-languages-status"></span>
+                    <span class="rb-sec-chevron">▾</span>
+                  </div>
+                  <div class="rb-sec-body collapsed" id="rbs-languages-body">
+                    <div id="rb-lang-list"></div>
+                    <button class="rb-add-entry-btn" onclick="rbAddLang()">+ Add Language</button>
+                  </div>
+                </div>
+
+                <!-- Publications -->
+                <div class="rb-sec" id="rbs-publications">
+                  <div class="rb-sec-hdr" onclick="rbToggleSec('publications')">
+                    <span class="rb-sec-icon">📄</span>
+                    <span class="rb-sec-title">Publications</span>
+                    <span class="rb-sec-status" id="rbs-publications-status"></span>
+                    <span class="rb-sec-chevron">▾</span>
+                  </div>
+                  <div class="rb-sec-body collapsed" id="rbs-publications-body">
+                    <div id="rb-pub-list"></div>
+                    <button class="rb-add-entry-btn" onclick="rbAddPub()">+ Add Publication</button>
+                  </div>
+                </div>
+
+                <!-- References -->
+                <div class="rb-sec" id="rbs-references">
+                  <div class="rb-sec-hdr" onclick="rbToggleSec('references')">
+                    <span class="rb-sec-icon">👥</span>
+                    <span class="rb-sec-title">References</span>
+                    <span class="rb-sec-status" id="rbs-references-status"></span>
+                    <span class="rb-sec-chevron">▾</span>
+                  </div>
+                  <div class="rb-sec-body collapsed" id="rbs-references-body">
+                    <p style="font-size:.76rem;color:var(--text-muted);margin-bottom:10px;padding:0 2px;">Add referees or select "Available on request".</p>
+                    <label style="display:flex;align-items:center;gap:8px;font-family:var(--fm);font-size:.7rem;color:var(--text-muted);margin-bottom:12px;cursor:pointer;">
+                      <input type="checkbox" id="rb-ref-on-request" onchange="rbSync()"> Available on request
+                    </label>
+                    <div id="rb-ref-list"></div>
+                    <button class="rb-add-entry-btn" onclick="rbAddRef()">+ Add Reference</button>
+                  </div>
+                </div>
+
               </div><!-- /rb-sections -->
             </div><!-- /rb-form-col -->
 
@@ -1129,8 +1278,68 @@
 
       </div><!-- /panel-builder -->
 
+      <!-- ── COVER LETTER ── -->
+      <div class="panel" id="panel-cover-letter">
+        <div class="panel-header">Cover <em>Letter</em></div>
+        <p class="desc">AI-generate a tailored cover letter from your resume and a job description. Edit, copy, or download as a text file.</p>
+
+        <div style="margin-bottom:16px;">
+          <div class="rb-ctrl-label" style="margin-bottom:6px;font-family:var(--fm);font-size:.62rem;letter-spacing:1.8px;text-transform:uppercase;color:var(--text-muted);">Recipient Name (optional)</div>
+          <input id="cl-recipient" placeholder="e.g. Hiring Manager, Sarah Chen…"
+            style="width:100%;max-width:420px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;color:var(--text);font-family:var(--fb);font-size:.86rem;">
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <div class="rb-ctrl-label" style="margin-bottom:6px;font-family:var(--fm);font-size:.62rem;letter-spacing:1.8px;text-transform:uppercase;color:var(--text-muted);">Company Name (optional)</div>
+          <input id="cl-company" placeholder="e.g. Google, Tesquirel Solutions…"
+            style="width:100%;max-width:420px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;color:var(--text);font-family:var(--fb);font-size:.86rem;">
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <div class="rb-ctrl-label" style="margin-bottom:6px;font-family:var(--fm);font-size:.62rem;letter-spacing:1.8px;text-transform:uppercase;color:var(--text-muted);">Job Description (paste for tailored letter)</div>
+          <textarea id="cl-jd" placeholder="Paste the job description here for a more targeted cover letter…"
+            style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;color:var(--text);font-family:var(--fb);font-size:.86rem;resize:vertical;min-height:120px;line-height:1.7;"></textarea>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" id="cl-generate-btn" onclick="clGenerate()">✦ Generate Cover Letter</button>
+          <select id="cl-tone-sel" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;color:var(--text);font-family:var(--fb);font-size:.86rem;cursor:pointer;">
+            <option value="professional">Professional</option>
+            <option value="confident">Confident</option>
+            <option value="enthusiastic">Enthusiastic</option>
+            <option value="concise">Concise</option>
+          </select>
+        </div>
+
+        <div id="cl-output" class="hidden" style="margin-top:24px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <div style="font-family:var(--fm);font-size:.62rem;letter-spacing:1.8px;text-transform:uppercase;color:var(--text-muted);">Generated Letter</div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-outline" style="padding:8px 16px;font-size:.8rem;" onclick="clCopy()">⎘ Copy</button>
+              <button class="btn btn-green" style="padding:8px 16px;font-size:.8rem;" onclick="clDownload()">↓ Download .txt</button>
+            </div>
+          </div>
+          <textarea id="cl-text" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;color:var(--text);font-family:var(--fb);font-size:.88rem;resize:vertical;min-height:480px;line-height:1.85;"></textarea>
+        </div>
+      </div>
 
     </main>
+  </div>
+</div>
+
+<!-- ══ FLOATING PREVIEW PANEL ══ -->
+<div id="rb-float-panel" class="hidden">
+  <div class="rb-float-header" id="rb-float-drag-handle">
+    <span class="rb-float-title">Live Preview</span>
+    <span class="rb-float-pages" id="rb-float-page-count"></span>
+    <button class="rb-float-close" onclick="rbToggleFloatPreview()" title="Close preview">✕</button>
+  </div>
+  <div class="rb-float-scroll" id="rb-float-scroll">
+    <div id="rb-float-content"></div>
+  </div>
+  <div class="rb-float-footer">
+    <span style="font-family:var(--fm);font-size:.58rem;color:var(--text-muted);flex:1;letter-spacing:.5px;">Updates live as you type</span>
+    <button class="btn btn-primary" style="padding:6px 14px;font-size:.76rem;" onclick="rbExportPDF()">↓ Export PDF</button>
   </div>
 </div>
 
@@ -1783,16 +1992,22 @@ let rbState = {
   template: 'tpm',
   accent:   '#1F3A93',
   spacing:  'normal',
+  font:     'arial',
   personal: {},
   summary:  [],
   experience: [],
   education:  [],
   skills:     { tech:'', soft:'', tools:'' },
   projects:   [],
-  certifications: []
+  certifications: [],
+  achievements: [],
+  languages:    [],
+  publications: [],
+  references:   [],
 };
 let rbAutoFillDone = false;
 let rbExpIdx = 0, rbEduIdx = 0, rbProjIdx = 0, rbCertIdx = 0;
+let rbLangIdx = 0, rbPubIdx = 0, rbRefIdx = 0;
 let rbAtsTimer = null;
 let rbUndoSnap = null;
 let rbInited = false;
@@ -1807,6 +2022,13 @@ const RB_ACCENTS = [
   { label:'Rose',     v:'#e11d48' },
 ];
 const RB_SPACING = { compact:0.85, normal:1, spacious:1.15 };
+const RB_FONTS = {
+  arial:    { label:'Arial',       css:"Arial,'Helvetica Neue',sans-serif",      serif:false },
+  georgia:  { label:'Georgia',     css:"Georgia,'Times New Roman',serif",        serif:true  },
+  calibri:  { label:'Calibri',     css:"Calibri,'Segoe UI',sans-serif",          serif:false },
+  garamond: { label:'Garamond',    css:"Garamond,'EB Garamond',Georgia,serif",   serif:true  },
+  helvetica:{ label:'Helvetica',   css:"'Helvetica Neue',Helvetica,Arial,sans-serif", serif:false },
+};
 
 // ── INIT ──────────────────────────────────────────────────
 function initBuilder() {
@@ -1968,6 +2190,47 @@ function rbSync() {
     });
   });
 
+  // ── New sections ──────────────────────────────────────────
+  rbState.achievements = [];
+  document.querySelectorAll('#rb-ach-list .rb-ach-input').forEach(inp => {
+    const v = inp.value.trim(); if (v) rbState.achievements.push(v);
+  });
+
+  rbState.languages = [];
+  document.querySelectorAll('.rb-lang-entry').forEach(card => {
+    const i = card.dataset.idx;
+    rbState.languages.push({
+      language:    rbVal(`rb-lang-name-${i}`),
+      proficiency: rbVal(`rb-lang-prof-${i}`),
+    });
+  });
+
+  rbState.publications = [];
+  document.querySelectorAll('.rb-pub-entry').forEach(card => {
+    const i = card.dataset.idx;
+    rbState.publications.push({
+      title:   rbVal(`rb-pub-title-${i}`),
+      journal: rbVal(`rb-pub-journal-${i}`),
+      year:    rbVal(`rb-pub-year-${i}`),
+      url:     rbVal(`rb-pub-url-${i}`),
+    });
+  });
+
+  const refOnRequest = document.getElementById('rb-ref-on-request')?.checked;
+  rbState.references = refOnRequest ? [{ onRequest: true }] : [];
+  if (!refOnRequest) {
+    document.querySelectorAll('.rb-ref-entry').forEach(card => {
+      const i = card.dataset.idx;
+      rbState.references.push({
+        name:     rbVal(`rb-ref-name-${i}`),
+        title:    rbVal(`rb-ref-title-${i}`),
+        company:  rbVal(`rb-ref-company-${i}`),
+        email:    rbVal(`rb-ref-email-${i}`),
+        phone:    rbVal(`rb-ref-phone-${i}`),
+      });
+    });
+  }
+
   rbUpdateSectionStatus();
   rbRenderPreview();
 
@@ -1987,6 +2250,10 @@ function rbUpdateSectionStatus() {
   setStatus('experience',     p.experience.some(e => e.role && e.company));
   setStatus('education',      p.education.some(e => e.institution));
   setStatus('skills',         !!(p.skills.tech));
+  setStatus('achievements',   p.achievements.length > 0);
+  setStatus('languages',      p.languages.length > 0);
+  setStatus('publications',   p.publications.length > 0);
+  setStatus('references',     p.references.length > 0);
 }
 
 // ── LIVE ATS ──────────────────────────────────────────────
@@ -1997,6 +2264,8 @@ function rbUpdateATS() {
     rbState.experience.map(e=>`${e.role} ${e.company} ${e.bullets.join(' ')}`).join(' '),
     rbState.education.map(e=>`${e.degree} ${e.institution}`).join(' '),
     rbState.skills.tech, rbState.skills.soft,
+    rbState.achievements.join(' '),
+    rbState.languages.map(l=>l.language).join(' '),
   ].join(' ').toLowerCase();
 
   const hasEmail = /\S+@\S+\.\S+/.test(text);
@@ -2220,6 +2489,137 @@ function rbAddCert(data) {
   rbSync();
 }
 
+// ── ACHIEVEMENT BULLETS ──────────────────────────────────────
+function rbAddAchBullet(text) {
+  const list = document.getElementById('rb-ach-list');
+  if (!list) return;
+  if (list.children.length >= 8) { showToast('Max 8 achievements', true); return; }
+  const row = document.createElement('div');
+  row.className = 'rb-bullet-row';
+  row.innerHTML = `<span style="color:var(--yellow);padding:8px 4px 0;flex-shrink:0;">🏅</span>
+    <input class="rb-ach-input" value="${rbEsc(text||'')}" placeholder="e.g. Top performer award Q3 2024, Led team of 12 engineers…" oninput="rbSync()">
+    <button class="rb-entry-btn del" onclick="this.closest('.rb-bullet-row').remove();rbSync()" title="Remove">✕</button>`;
+  list.appendChild(row);
+  if (!text) row.querySelector('input').focus();
+  rbSync();
+}
+
+// ── LANGUAGE ENTRIES ──────────────────────────────────────────
+function rbAddLang(data) {
+  const idx  = rbLangIdx++;
+  const list = document.getElementById('rb-lang-list');
+  const d    = data || {};
+  const card = document.createElement('div');
+  card.className = 'rb-entry-card rb-lang-entry'; card.dataset.idx = idx;
+  card.innerHTML = `
+    <div class="rb-entry-hdr" onclick="rbToggleEntry(this)">
+      <div class="rb-entry-hdr-info">
+        <div class="rb-entry-title">${rbEsc(d.language||'New Language')}</div>
+        <div class="rb-entry-sub">${rbEsc(d.proficiency||'')}</div>
+      </div>
+      <div class="rb-entry-actions">
+        <button class="rb-entry-btn del" onclick="event.stopPropagation();this.closest('.rb-entry-card').remove();rbSync()">✕</button>
+      </div>
+    </div>
+    <div class="rb-entry-body${data?'':' collapsed'}">
+      <div class="rb-form">
+        <div class="rb-row-2">
+          <div class="rb-field"><label>Language *</label>
+            <input id="rb-lang-name-${idx}" value="${rbEsc(d.language||'')}" placeholder="e.g. English, Hindi, Swedish…"
+              oninput="this.closest('.rb-entry-card').querySelector('.rb-entry-title').textContent=this.value||'New Language';rbSync()"></div>
+          <div class="rb-field"><label>Proficiency</label>
+            <select id="rb-lang-prof-${idx}" onchange="rbSync()" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px;color:var(--text);font-family:var(--fb);font-size:.85rem;width:100%;">
+              <option value="">Select level…</option>
+              <option value="Native" ${d.proficiency==='Native'?'selected':''}>Native</option>
+              <option value="Fluent" ${d.proficiency==='Fluent'?'selected':''}>Fluent</option>
+              <option value="Advanced" ${d.proficiency==='Advanced'?'selected':''}>Advanced (C1–C2)</option>
+              <option value="Intermediate" ${d.proficiency==='Intermediate'?'selected':''}>Intermediate (B1–B2)</option>
+              <option value="Basic" ${d.proficiency==='Basic'?'selected':''}>Basic (A1–A2)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  list.appendChild(card);
+  rbSync();
+}
+
+// ── PUBLICATION ENTRIES ───────────────────────────────────────
+function rbAddPub(data) {
+  const idx  = rbPubIdx++;
+  const list = document.getElementById('rb-pub-list');
+  const d    = data || {};
+  const card = document.createElement('div');
+  card.className = 'rb-entry-card rb-pub-entry'; card.dataset.idx = idx;
+  card.innerHTML = `
+    <div class="rb-entry-hdr" onclick="rbToggleEntry(this)">
+      <div class="rb-entry-hdr-info">
+        <div class="rb-entry-title" id="rb-pub-hdr-${idx}">${rbEsc(d.title||'New Publication')}</div>
+        <div class="rb-entry-sub">${rbEsc(d.journal||'')}${d.year?' · '+d.year:''}</div>
+      </div>
+      <div class="rb-entry-actions">
+        <button class="rb-entry-btn del" onclick="event.stopPropagation();this.closest('.rb-entry-card').remove();rbSync()">✕</button>
+      </div>
+    </div>
+    <div class="rb-entry-body${data?'':' collapsed'}">
+      <div class="rb-form">
+        <div class="rb-field"><label>Title *</label>
+          <input id="rb-pub-title-${idx}" value="${rbEsc(d.title||'')}" placeholder="Research paper or article title…"
+            oninput="document.getElementById('rb-pub-hdr-${idx}').textContent=this.value||'New Publication';rbSync()"></div>
+        <div class="rb-row-2">
+          <div class="rb-field"><label>Journal / Conference</label>
+            <input id="rb-pub-journal-${idx}" value="${rbEsc(d.journal||'')}" placeholder="IEEE, Nature, Medium…" oninput="rbSync()"></div>
+          <div class="rb-field"><label>Year</label>
+            <input id="rb-pub-year-${idx}" value="${rbEsc(d.year||'')}" placeholder="2024" oninput="rbSync()"></div>
+        </div>
+        <div class="rb-field"><label>URL / DOI (optional)</label>
+          <input id="rb-pub-url-${idx}" value="${rbEsc(d.url||'')}" placeholder="https://doi.org/…" oninput="rbSync()"></div>
+      </div>
+    </div>`;
+  list.appendChild(card);
+  rbSync();
+}
+
+// ── REFERENCE ENTRIES ─────────────────────────────────────────
+function rbAddRef(data) {
+  const idx  = rbRefIdx++;
+  const list = document.getElementById('rb-ref-list');
+  const d    = data || {};
+  const card = document.createElement('div');
+  card.className = 'rb-entry-card rb-ref-entry'; card.dataset.idx = idx;
+  card.innerHTML = `
+    <div class="rb-entry-hdr" onclick="rbToggleEntry(this)">
+      <div class="rb-entry-hdr-info">
+        <div class="rb-entry-title" id="rb-ref-hdr-${idx}">${rbEsc(d.name||'New Reference')}</div>
+        <div class="rb-entry-sub">${rbEsc(d.title||'')}${d.company?' · '+rbEsc(d.company):''}</div>
+      </div>
+      <div class="rb-entry-actions">
+        <button class="rb-entry-btn del" onclick="event.stopPropagation();this.closest('.rb-entry-card').remove();rbSync()">✕</button>
+      </div>
+    </div>
+    <div class="rb-entry-body${data?'':' collapsed'}">
+      <div class="rb-form">
+        <div class="rb-row-2">
+          <div class="rb-field"><label>Full Name *</label>
+            <input id="rb-ref-name-${idx}" value="${rbEsc(d.name||'')}" placeholder="Dr. Jane Smith"
+              oninput="document.getElementById('rb-ref-hdr-${idx}').textContent=this.value||'New Reference';rbSync()"></div>
+          <div class="rb-field"><label>Job Title</label>
+            <input id="rb-ref-title-${idx}" value="${rbEsc(d.title||'')}" placeholder="Senior Director" oninput="rbSync()"></div>
+        </div>
+        <div class="rb-row-2">
+          <div class="rb-field"><label>Company</label>
+            <input id="rb-ref-company-${idx}" value="${rbEsc(d.company||'')}" placeholder="Ericsson" oninput="rbSync()"></div>
+          <div class="rb-field"><label>Email</label>
+            <input id="rb-ref-email-${idx}" value="${rbEsc(d.email||'')}" placeholder="jane@company.com" oninput="rbSync()"></div>
+        </div>
+        <div class="rb-field"><label>Phone (optional)</label>
+          <input id="rb-ref-phone-${idx}" value="${rbEsc(d.phone||'')}" placeholder="+1 555 0000" oninput="rbSync()"></div>
+      </div>
+    </div>`;
+  list.appendChild(card);
+  rbSync();
+}
+
 // ── BULLET HELPERS ────────────────────────────────────────
 function rbAddBullet(listId, text) {
   const list = document.getElementById(listId);
@@ -2359,6 +2759,22 @@ async function rbAutoFill() {
       d.certifications.forEach(cert => rbAddCert(cert));
     }
 
+    // Populate new sections if parser returns them
+    if (d.achievements?.length) {
+      const achList = document.getElementById('rb-ach-list');
+      if (achList) { achList.innerHTML = ''; d.achievements.forEach(a => rbAddAchBullet(a)); }
+    }
+    if (d.languages?.length) {
+      document.getElementById('rb-lang-list').innerHTML = '';
+      rbLangIdx = 0;
+      d.languages.forEach(l => rbAddLang(l));
+    }
+    if (d.publications?.length) {
+      document.getElementById('rb-pub-list').innerHTML = '';
+      rbPubIdx = 0;
+      d.publications.forEach(pub => rbAddPub(pub));
+    }
+
     rbSync();
     rbOpenSec('personal');
 
@@ -2432,6 +2848,9 @@ function rbRestoreState(s) {
   const st = document.getElementById('rb-skills-tech'); if(st) st.value = s.skills?.tech||'';
   const ss = document.getElementById('rb-skills-soft'); if(ss) ss.value = s.skills?.soft||'';
   const so = document.getElementById('rb-skills-tools');if(so) so.value = s.skills?.tools||'';
+  // Restore achievements
+  const achList = document.getElementById('rb-ach-list');
+  if (achList) { achList.innerHTML = ''; (s.achievements||[]).forEach(a => rbAddAchBullet(a)); }
   rbSync();
 }
 
@@ -2495,6 +2914,25 @@ async function rbAI(action) {
         rbSync(); rbShowUndoBanner('Summary tailored for JD'); showToast('Tailored ✓');
       }
     } catch(e) { showToast('Tailor failed', true); }
+
+  } else if (action === 'ach_generate') {
+    const ctx = [rbVal('rb-title'),
+      rbState.experience.slice(0,2).map(e=>`${e.role} at ${e.company}`).join(', ')
+    ].filter(Boolean).join('. ');
+    try {
+      const r = await fetch('/api/ai-resume-assist', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ action:'generate_section', section_type:'achievements', context:ctx })
+      });
+      const d = await r.json();
+      const items = (d.content||'').split(/[•\n]+/).map(l=>l.trim()).filter(l=>l.length>8).slice(0,5);
+      const achList = document.getElementById('rb-ach-list');
+      if (achList && items.length) {
+        achList.innerHTML = '';
+        items.forEach(a => rbAddAchBullet(a));
+        rbSync(); showToast('Achievements suggested ✓');
+      } else { showToast('No suggestions returned', true); }
+    } catch(e) { showToast('Suggestion failed', true); }
 
   } else if (action === 'skills_suggest') {
     const ctx = [rbVal('rb-title'), rbState.experience.map(e=>e.role).filter(Boolean).join(', ')].join('. ');
@@ -2625,65 +3063,263 @@ function rbInsertBullet(listId, el) {
   showToast('Bullet added ✓');
 }
 
-// ── LIVE PREVIEW — paginated A4 sheets ───────────────────────
-function rbRenderPreview() {
-  const container = document.getElementById('rb-preview-content');
-  if (!container) return;
-  const tpl = rbState.template;
-
-  let bodyHtml = '';
-  if      (tpl === 'tpm')     bodyHtml = rbRenderTPM();
-  else if (tpl === 'modern')  bodyHtml = rbRenderModern();
-  else if (tpl === 'minimal') bodyHtml = rbRenderMinimal();
-  else                        bodyHtml = rbRenderClassic();
-
-  // ── Paginate: measure real content height via hidden iframe ──────────────
-  // A4 at 96dpi screen = 210mm × 297mm = ~794px × ~1123px
-  // We render into an off-screen iframe at A4 width with the same CSS,
-  // then read scrollHeight to decide how many page sheets to show.
-  const A4_W_PX  = 794;   // 210mm at 96dpi
-  const A4_H_PX  = 1123;  // 297mm at 96dpi
-  // Content area = A4 minus padding (12mm top+bottom, 13mm left+right ≈ 46px top/btm, 50px L/R)
-  const PAD_H    = 46;     // 12mm top + 14mm bottom at 96dpi (~46px)
-  const CONTENT_H = A4_H_PX - PAD_H * 2;
-
-  // Build paginated HTML: render ALL content in one hidden div, then split into pages
-  // We use CSS columns trick: set a fixed height container and let browser paginate
-  // But the most reliable approach for preview is: render full content, show page boundaries as overlays
-
-  // Strategy: render full content as one sheet; overlay faint page-break lines to show
-  // where pages would break. This is visually accurate without needing JS measurement.
-  // For exact page simulation use: one .rb-page-sheet per estimated page.
-
-  // We'll do a quick height estimate: render into a temp hidden div
-  let tempDiv = document.getElementById('_rb_temp_measure');
-  if (!tempDiv) {
-    tempDiv = document.createElement('div');
-    tempDiv.id = '_rb_temp_measure';
-    tempDiv.style.cssText = `position:fixed;left:-9999px;top:0;width:${A4_W_PX}px;visibility:hidden;pointer-events:none;font-family:Arial,sans-serif;font-size:9.5pt;line-height:1.3;padding:46px 50px;box-sizing:border-box;`;
-    document.body.appendChild(tempDiv);
-  }
-  tempDiv.innerHTML = bodyHtml;
-  const contentHeight = tempDiv.scrollHeight;
-  const pageCount = Math.max(1, Math.ceil(contentHeight / CONTENT_H));
-
-  // Render pages: use CSS print pagination via column-based slicing
-  // Each page = a fixed-height clipping window offset into the content
-  let pagesHtml = '';
-  for (let pg = 0; pg < pageCount; pg++) {
-    const offsetY = pg * CONTENT_H;
-    pagesHtml += `
-      <div class="rb-page-label">Page ${pg + 1} of ${pageCount}</div>
-      <div class="rb-page-sheet">
-        <div style="overflow:hidden;height:${CONTENT_H}px;position:relative;">
-          <div style="position:absolute;top:${-offsetY}px;left:0;right:0;">
-            ${bodyHtml}
-          </div>
-        </div>
-      </div>`;
-  }
-  container.innerHTML = pagesHtml;
+// ── FONT SELECTOR ────────────────────────────────────────────
+function rbSetFont(v) {
+  rbState.font = v;
+  rbSync();
 }
+
+// ── AI: ACHIEVEMENTS SUGGEST ──────────────────────────────────
+// Hooked into rbAI() via 'ach_generate' action
+// Extended rbAI below handles this case
+
+// ── COVER LETTER ENGINE ───────────────────────────────────────
+let clCache = null;
+
+async function clGenerate() {
+  const btn  = document.getElementById('cl-generate-btn');
+  const out  = document.getElementById('cl-output');
+  const ta   = document.getElementById('cl-text');
+  const tone = document.getElementById('cl-tone-sel')?.value || 'professional';
+  const recip = document.getElementById('cl-recipient')?.value?.trim() || 'Hiring Manager';
+  const company= document.getElementById('cl-company')?.value?.trim()  || 'your company';
+  const jd     = document.getElementById('cl-jd')?.value?.trim()       || '';
+
+  if (!sessionId && !rbState.personal.name) {
+    showToast('Upload a resume or fill in your details in Build Resume first', true); return;
+  }
+
+  btn.disabled = true; btn.textContent = '⏳ Generating…';
+  out.classList.add('hidden');
+
+  // Build context from rbState or session
+  const name   = rbState.personal.name  || 'the applicant';
+  const title  = rbState.personal.title || '';
+  const sumBuls = rbState.summary.length ? rbState.summary.join('\n• ') : '';
+  const expSnippet = rbState.experience.slice(0,3).map(e =>
+    `${e.role} at ${e.company} (${e.start||''}–${e.end||''})`).join(', ');
+  const skills = rbState.skills.tech ? rbState.skills.tech.split(',').slice(0,8).join(', ') : '';
+
+  const prompt = `You are an expert career coach and professional writer.
+Write a compelling cover letter for the job application below.
+
+Candidate: ${name}${title ? ', ' + title : ''}
+Summary highlights:
+${sumBuls ? '• ' + sumBuls : '(not provided)'}
+Recent experience: ${expSnippet || '(not provided)'}
+Key skills: ${skills || '(not provided)'}
+
+Addressed to: ${recip} at ${company}
+Tone: ${tone}
+${jd ? `
+Job Description:
+${jd.slice(0,1500)}` : ''}
+
+Requirements:
+- 3–4 concise paragraphs, max 350 words
+- Opening paragraph: express genuine enthusiasm for the specific role/company
+- Middle paragraph(s): connect 2–3 specific achievements/skills to the job requirements
+- Closing paragraph: confident call to action with contact availability
+- Professional sign-off with candidate's name
+- Do NOT use generic filler phrases like "I am writing to express my interest"
+- Be specific, confident, and human — not robotic
+- Return ONLY the letter text, no subject line, no markdown, no preamble`;
+
+  try {
+    let text = '';
+    if (sessionId) {
+      // Use backend AI
+      const r = await fetch('/api/ai-resume-assist', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ action:'generate_cover_letter', context:prompt, section_type:'cover_letter' })
+      });
+      const d = await r.json();
+      text = d.content || d.letter || d.improved || d.tailored || '';
+      if (!text && d.raw) text = d.raw;
+    }
+
+    if (!text) {
+      // Fallback: structured placeholder the user can edit
+      text = `Dear ${recip},
+
+I am excited to apply for the ${title || 'position'} role at ${company}. With ${rbState.experience.length > 0 ? rbState.experience[0].role + ' experience' : 'my background'} and a proven track record in delivering results, I am confident I can make an immediate impact on your team.
+
+${sumBuls ? 'Throughout my career, I have ' + rbState.summary[0]?.toLowerCase().replace(/^[•\-\s]+/,'') + '.' : 'My experience spans technical program management, cross-functional team leadership, and delivering complex programmes on schedule and within budget.'}
+
+I am particularly drawn to ${company} because of its focus on innovation and impact. I would welcome the opportunity to discuss how my background aligns with your goals.
+
+Thank you for your time and consideration. I look forward to speaking with you.
+
+Best regards,
+${name}`;
+    }
+
+    clCache = text;
+    ta.value = text;
+    out.classList.remove('hidden');
+    btn.textContent = '✓ Generated — edit as needed';
+    setTimeout(() => { btn.disabled = false; btn.textContent = '↺ Regenerate'; }, 1500);
+  } catch(err) {
+    btn.disabled = false; btn.textContent = '✦ Generate Cover Letter';
+    showToast('Generation failed: ' + err.message, true);
+  }
+}
+
+function clCopy() {
+  const ta = document.getElementById('cl-text');
+  if (!ta || !ta.value) { showToast('Generate a letter first', true); return; }
+  navigator.clipboard.writeText(ta.value).then(() => showToast('Cover letter copied ✓'));
+}
+
+function clDownload() {
+  const ta = document.getElementById('cl-text');
+  if (!ta || !ta.value) { showToast('Generate a letter first', true); return; }
+  const name = rbState.personal.name || 'Cover_Letter';
+  const blob = new Blob([ta.value], { type: 'text/plain' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = name.replace(/\s+/g,'_') + '_Cover_Letter.txt';
+  a.click(); URL.revokeObjectURL(url);
+  showToast('Cover letter downloaded ✓');
+}
+
+// ── TXT EXPORT ────────────────────────────────────────────────
+function rbExportTXT() {
+  const p  = rbState.personal;
+  const sk = rbState.skills;
+  const NL = '\n';
+  const HR = '\u2500'.repeat(40);
+  let txt  = '';
+
+  // Header
+  txt += (p.name || 'NAME') + NL;
+  if (p.title) txt += p.title + NL;
+  const contacts = [p.location, p.email, p.phone, p.linkedin, p.portfolio]
+    .filter(Boolean).join(' | ');
+  if (contacts) txt += contacts + NL;
+  txt += NL;
+
+  // Summary
+  if (rbState.summary.length) {
+    txt += 'SUMMARY' + NL + HR + NL;
+    rbState.summary.forEach(b => { txt += '\u2022 ' + b + NL; });
+    txt += NL;
+  }
+
+  // Experience
+  if (rbState.experience.some(e => e.role)) {
+    txt += 'PROFESSIONAL EXPERIENCE' + NL + HR + NL;
+    rbState.experience.filter(e => e.role).forEach(e => {
+      txt += e.role + NL;
+      const co = [e.company, e.location].filter(Boolean).join(', ');
+      const dt = [e.start, e.end].filter(Boolean).join(' \u2013 ');
+      txt += co + (dt ? '  |  ' + dt : '') + NL;
+      if (e.domain) txt += e.domain + NL;
+      e.bullets.filter(b => b.trim()).forEach(b => { txt += '  \u2022 ' + b + NL; });
+      txt += NL;
+    });
+  }
+
+  // Education
+  if (rbState.education.some(e => e.institution)) {
+    txt += 'EDUCATION' + NL + HR + NL;
+    rbState.education.filter(e => e.institution).forEach(e => {
+      const yr = e.end || e.year || '';
+      txt += e.institution + (yr ? '  |  ' + yr : '') + NL;
+      const deg = [e.degree, e.field].filter(Boolean).join(' \u2013 ');
+      if (deg) txt += deg + (e.gpa ? '  |  GPA ' + e.gpa : '') + NL;
+      txt += NL;
+    });
+  }
+
+  // Skills
+  if (sk.tech || sk.soft || sk.tools) {
+    txt += 'SKILLS' + NL + HR + NL;
+    if (sk.tech)  txt += '\u2022 Technical: '  + sk.tech  + NL;
+    if (sk.soft)  txt += '\u2022 Leadership: ' + sk.soft  + NL;
+    if (sk.tools) txt += '\u2022 Domains: '    + sk.tools + NL;
+    txt += NL;
+  }
+
+  // Projects
+  if (rbState.projects.some(pj => pj.name)) {
+    txt += 'PROJECTS' + NL + HR + NL;
+    rbState.projects.filter(pj => pj.name).forEach(pj => {
+      txt += pj.name + (pj.tech ? '  [' + pj.tech + ']' : '') + NL;
+      pj.bullets.filter(b => b.trim()).forEach(b => { txt += '  \u2022 ' + b + NL; });
+      txt += NL;
+    });
+  }
+
+  // Certifications
+  if (rbState.certifications.length) {
+    txt += 'CERTIFICATIONS' + NL + HR + NL;
+    rbState.certifications.forEach(c => {
+      txt += '\u2022 ' + c.name +
+        (c.issuer ? ' \u00b7 ' + c.issuer : '') +
+        (c.year   ? ' \u00b7 ' + c.year   : '') + NL;
+    });
+    txt += NL;
+  }
+
+  // Achievements
+  if (rbState.achievements.length) {
+    txt += 'ACHIEVEMENTS' + NL + HR + NL;
+    rbState.achievements.forEach(a => { txt += '\u2022 ' + a + NL; });
+    txt += NL;
+  }
+
+  // Languages
+  if (rbState.languages.length) {
+    txt += 'LANGUAGES' + NL + HR + NL;
+    rbState.languages.forEach(l => {
+      txt += '\u2022 ' + l.language + (l.proficiency ? ' \u2014 ' + l.proficiency : '') + NL;
+    });
+    txt += NL;
+  }
+
+  // Publications
+  if (rbState.publications.length) {
+    txt += 'PUBLICATIONS' + NL + HR + NL;
+    rbState.publications.forEach(pub => {
+      txt += '\u2022 ' + pub.title;
+      if (pub.journal) txt += ', ' + pub.journal;
+      if (pub.year)    txt += ' (' + pub.year + ')';
+      txt += NL;
+      if (pub.url) txt += '  ' + pub.url + NL;
+    });
+    txt += NL;
+  }
+
+  // References
+  if (rbState.references.length) {
+    txt += 'REFERENCES' + NL + HR + NL;
+    if (rbState.references[0] && rbState.references[0].onRequest) {
+      txt += 'Available on request' + NL;
+    } else {
+      rbState.references.forEach(r => {
+        txt += (r.name || '') +
+          (r.title   ? ', ' + r.title   : '') +
+          (r.company ? ' at ' + r.company : '') + NL;
+        if (r.email) txt += '  Email: ' + r.email + NL;
+        if (r.phone) txt += '  Phone: ' + r.phone + NL;
+        txt += NL;
+      });
+    }
+  }
+
+  const fileName = (p.name || 'Resume').replace(/\s+/g, '_') + '_Resume.txt';
+  const blob = new Blob([txt.trim()], { type: 'text/plain' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('TXT resume downloaded \u2713');
+}
+
+// rbRenderPreview() is defined at bottom of file (debounced wrapper for _rbRenderPreviewNow)
 
 function rbE(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
@@ -2756,16 +3392,17 @@ function rbRenderTPM() {
   const validExp = rbState.experience.filter(e => e.role);
   const expHtml = validExp.length
     ? secHdr('PROFESSIONAL EXPERIENCE') +
-      validExp.map(e =>
-        // break-inside:avoid on a BLOCK container (not flex) is the only reliable
-        // cross-browser way to prevent an entry splitting across pages.
-        '<div style="break-inside:avoid;page-break-inside:avoid;display:block;margin-bottom:' + (4*sc) + 'px;">' +
+      validExp.map((e, ei) => {
+        // data-exp-idx used by rbDetectPageSpills() to measure each entry's position
+        // break-inside:avoid on a BLOCK container prevents mid-entry page splits
+        const origIdx = rbState.experience.indexOf(e);
+        return '<div data-exp-idx="' + origIdx + '" style="break-inside:avoid;page-break-inside:avoid;display:block;margin-bottom:' + (4*sc) + 'px;">' +
           jobTitleRow(e.role) +
           companyRow(e.company, e.location, e.start, e.end) +
           domainRow(e.domain) +
           e.bullets.filter(b => b.trim()).map(bul).join('') +
-        '</div>'
-      ).join('')
+          '</div>';
+      }).join('')
     : '';
 
   // Education
@@ -2830,13 +3467,67 @@ function rbRenderTPM() {
       }).join('')
     : '';
 
-  return '<div style="font-family:Arial,\'Helvetica Neue\',sans-serif;font-size:' + (9.5*sc) + 'px;color:#111;background:white;padding:' + (15*sc) + 'px ' + (14*sc) + 'px ' + (15*sc) + 'px ' + (14*sc) + 'px;min-height:100%;">' +
+  // Achievements
+  const achHtml = rbState.achievements.length
+    ? secHdr('ACHIEVEMENTS') +
+      rbState.achievements.map(a => bul(a)).join('')
+    : '';
+
+  // Languages
+  const langHtml = rbState.languages.length
+    ? secHdr('LANGUAGES') +
+      '<div style="display:flex;flex-wrap:wrap;gap:' + (6*sc) + 'px;">' +
+      rbState.languages.map(l =>
+        '<div style="background:#f0f4ff;border:0.75px solid #c8d8f8;border-radius:3px;padding:' + (2*sc) + 'px ' + (7*sc) + 'px;font-family:Arial,sans-serif;font-size:' + (9*sc) + 'px;color:#111;">' +
+          '<strong>' + E(l.language) + '</strong>' + (l.proficiency ? ' <span style="color:#555;font-size:' + (8.5*sc) + 'px;">— ' + E(l.proficiency) + '</span>' : '') +
+        '</div>'
+      ).join('') +
+      '</div>'
+    : '';
+
+  // Publications
+  const pubHtml = rbState.publications.length
+    ? secHdr('PUBLICATIONS') +
+      rbState.publications.map(pub =>
+        '<div style="margin-bottom:' + (4*sc) + 'px;">' +
+          '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:' + (9.5*sc) + 'px;font-style:italic;color:#111;">' + E(pub.title) + '</div>' +
+          '<div style="font-family:Arial,sans-serif;font-size:' + (9*sc) + 'px;color:#444;">' +
+            [pub.journal, pub.year].filter(Boolean).join(' · ') +
+            (pub.url ? ' — <span style="color:#1F3A93;">' + E(pub.url) + '</span>' : '') +
+          '</div>' +
+        '</div>'
+      ).join('')
+    : '';
+
+  // References
+  const refHtml = rbState.references.length
+    ? secHdr('REFERENCES') +
+      (rbState.references[0]?.onRequest
+        ? '<div style="font-family:Arial,sans-serif;font-size:' + (9.5*sc) + 'px;font-style:italic;color:#555;">Available on request</div>'
+        : '<div style="display:grid;grid-template-columns:1fr 1fr;gap:' + (8*sc) + 'px;">' +
+          rbState.references.map(r =>
+            '<div style="background:#f9f9f9;border:0.75px solid #ddd;padding:' + (6*sc) + 'px;border-radius:3px;">' +
+              '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:' + (9.5*sc) + 'px;font-weight:700;color:#111;">' + E(r.name) + '</div>' +
+              (r.title   ? '<div style="font-family:Arial,sans-serif;font-size:' + (8.5*sc) + 'px;color:#444;">' + E(r.title) + (r.company ? ', ' + E(r.company) : '') + '</div>' : '') +
+              (r.email   ? '<div style="font-family:Arial,sans-serif;font-size:' + (8.5*sc) + 'px;color:#1F3A93;">' + E(r.email) + '</div>' : '') +
+              (r.phone   ? '<div style="font-family:Arial,sans-serif;font-size:' + (8.5*sc) + 'px;color:#555;">' + E(r.phone) + '</div>' : '') +
+            '</div>'
+          ).join('') +
+          '</div>'
+      )
+    : '';
+
+  // Apply font choice
+  const fontCss = (RB_FONTS[rbState.font] || RB_FONTS.arial).css;
+
+  return '<div style="font-family:' + fontCss + ';font-size:' + (9.5*sc) + 'px;color:#111;background:white;padding:' + (15*sc) + 'px ' + (14*sc) + 'px ' + (15*sc) + 'px ' + (14*sc) + 'px;min-height:100%;">' +
     '<div style="text-align:center;margin-bottom:' + (7*sc) + 'px;">' +
       '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:' + (20*sc) + 'px;font-weight:700;letter-spacing:1px;color:#0a0a0a;line-height:1.1;margin-bottom:' + (2*sc) + 'px;">' + E(p.name || 'YOUR NAME') + '</div>' +
       (p.title ? '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:' + (11*sc) + 'px;font-weight:700;color:#222;margin-bottom:' + (2*sc) + 'px;">' + E(p.title) + '</div>' : '') +
       contactBlock +
     '</div>' +
     summaryHtml + expHtml + eduHtml + skillsHtml + projHtml + certHtml +
+    achHtml + langHtml + pubHtml + refHtml +
   '</div>';
 }
 
@@ -3038,6 +3729,52 @@ function rbExportPDF() {
         }).join('')
       : '';
 
+    // New sections for export
+    const achPt = rbState.achievements.length
+      ? secHdr('ACHIEVEMENTS') + rbState.achievements.map(bulPt).join('')
+      : '';
+
+    const langPt = rbState.languages.length
+      ? secHdr('LANGUAGES') +
+        '<div style="display:flex;flex-wrap:wrap;gap:5pt;">' +
+        rbState.languages.map(l =>
+          '<div style="background:#f0f4ff;border:0.5pt solid #c8d8f8;border-radius:2pt;padding:1.5pt 6pt;font-family:Arial,sans-serif;font-size:9pt;color:#111;">' +
+            '<strong>' + E(l.language) + '</strong>' + (l.proficiency ? ' <span style="color:#555;font-size:8.5pt;">— ' + E(l.proficiency) + '</span>' : '') +
+          '</div>'
+        ).join('') + '</div>'
+      : '';
+
+    const pubPt = rbState.publications.length
+      ? secHdr('PUBLICATIONS') +
+        rbState.publications.map(pub =>
+          '<div style="margin-bottom:3pt;page-break-inside:avoid;">' +
+            '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:9.5pt;font-style:italic;color:#111;">' + E(pub.title) + '</div>' +
+            '<div style="font-family:Arial,sans-serif;font-size:9pt;color:#444;">' +
+              [pub.journal, pub.year].filter(Boolean).join(' · ') +
+              (pub.url ? ' — ' + E(pub.url) : '') +
+            '</div></div>'
+        ).join('')
+      : '';
+
+    const refPt = rbState.references.length
+      ? secHdr('REFERENCES') +
+        (rbState.references[0]?.onRequest
+          ? '<div style="font-family:Arial,sans-serif;font-size:9.5pt;font-style:italic;color:#555;">Available on request</div>'
+          : '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6pt;">' +
+            rbState.references.map(r =>
+              '<div style="background:#f9f9f9;border:0.5pt solid #ddd;padding:5pt;page-break-inside:avoid;">' +
+                '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:9.5pt;font-weight:700;">' + E(r.name) + '</div>' +
+                (r.title  ? '<div style="font-size:8.5pt;color:#444;">' + E(r.title) + (r.company?', '+E(r.company):'') + '</div>' : '') +
+                (r.email  ? '<div style="font-size:8.5pt;color:#1F3A93;">' + E(r.email) + '</div>' : '') +
+                (r.phone  ? '<div style="font-size:8.5pt;color:#555;">'   + E(r.phone) + '</div>' : '') +
+              '</div>'
+            ).join('') + '</div>'
+        )
+      : '';
+
+    // Font selection for PDF
+    const exportFontCss = (RB_FONTS[rbState.font] || RB_FONTS.arial).css;
+
     bodyContent =
       '<div class="page">' +
         '<div style="text-align:center;margin-bottom:6pt;">' +
@@ -3046,6 +3783,7 @@ function rbExportPDF() {
           eContactBlock +
         '</div>' +
         sumPt + expPt + eduPt + skillsPt + projPt + certPt +
+        achPt + langPt + pubPt + refPt +
       '</div>';
 
     pageCSS =
@@ -3053,7 +3791,7 @@ function rbExportPDF() {
       '@page { size: A4; margin: 0; }\n' +
       'html, body { margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }\n' +
       '/* The .page wrapper carries the real document margins */\n' +
-      '.page { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 12mm 13mm 14mm 13mm; font-family: Arial, "Helvetica Neue", sans-serif; font-size: 9.5pt; color: #111; box-sizing: border-box; }\n' +
+      '.page { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 12mm 13mm 14mm 13mm; font-family: ' + exportFontCss + '; font-size: 9.5pt; color: #111; box-sizing: border-box; }\n' +
       '/* Critical: block elements with break-inside:avoid must be display:block — flex breaks the property */\n' +
       'div[style*="break-inside:avoid"] { display: block !important; break-inside: avoid; page-break-inside: avoid; }';
 
@@ -3153,16 +3891,304 @@ function fullReset() {
   showPanel('overview');
 }
 
-// ── PREVIEW DEBOUNCE — prevent lag on every keystroke ─────────
-let rbPreviewTimer = null;
-const _rbRenderPreviewImmediate = rbRenderPreview;
+// ═══════════════════════════════════════════════════════════════
+//  FLOATING PREVIEW PANEL
+// ═══════════════════════════════════════════════════════════════
+
+let rbFloatVisible = false;   // panel starts hidden; user toggles
+let rbFloatDragging = false;
+let rbFloatDragOX = 0, rbFloatDragOY = 0;
+
+function rbToggleFloatPreview() {
+  rbFloatVisible = !rbFloatVisible;
+  const panel  = document.getElementById('rb-float-panel');
+  const btn    = document.getElementById('rb-preview-toggle-btn');
+  if (!panel) return;
+  panel.classList.toggle('hidden', !rbFloatVisible);
+  if (btn) btn.classList.toggle('active', rbFloatVisible);
+  if (rbFloatVisible) rbRenderFloatPreview();
+}
+
+// Make the float panel draggable by its header
+function rbInitFloatDrag() {
+  const handle = document.getElementById('rb-float-drag-handle');
+  const panel  = document.getElementById('rb-float-panel');
+  if (!handle || !panel) return;
+  handle.addEventListener('mousedown', e => {
+    rbFloatDragging = true;
+    const rect = panel.getBoundingClientRect();
+    rbFloatDragOX = e.clientX - rect.left;
+    rbFloatDragOY = e.clientY - rect.top;
+    document.body.style.userSelect = 'none';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!rbFloatDragging) return;
+    const panel = document.getElementById('rb-float-panel');
+    if (!panel) return;
+    let x = e.clientX - rbFloatDragOX;
+    let y = e.clientY - rbFloatDragOY;
+    // Clamp within viewport
+    x = Math.max(0, Math.min(window.innerWidth  - panel.offsetWidth,  x));
+    y = Math.max(0, Math.min(window.innerHeight - panel.offsetHeight, y));
+    panel.style.right  = 'auto';
+    panel.style.bottom = 'auto';
+    panel.style.left   = x + 'px';
+    panel.style.top    = y + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    rbFloatDragging = false;
+    document.body.style.userSelect = '';
+  });
+}
+
+// Render into BOTH the inline right-column preview AND the float panel
+function rbRenderFloatPreview() {
+  if (!rbFloatVisible) return;
+  const floatContent = document.getElementById('rb-float-content');
+  const floatPages   = document.getElementById('rb-float-page-count');
+  if (!floatContent) return;
+  // Re-use the measurement already done by rbRenderPreview (tempDiv)
+  const tempDiv = document.getElementById('_rb_temp_measure');
+  if (!tempDiv) return;
+  const A4_H_PX   = 1123;
+  const PAD_H     = 46;
+  const CONTENT_H = A4_H_PX - PAD_H * 2;
+  const bodyHtml  = tempDiv.innerHTML;
+  const pageCount = Math.max(1, Math.ceil(tempDiv.scrollHeight / CONTENT_H));
+  if (floatPages) floatPages.textContent = pageCount === 1 ? '1 page' : pageCount + ' pages';
+
+  let pagesHtml = '';
+  for (let pg = 0; pg < pageCount; pg++) {
+    const offsetY = pg * CONTENT_H;
+    // Scale: float panel is ~436px wide, A4 content is 694px wide → scale ≈ 0.63
+    const scale = 0.63;
+    const scaledH = Math.round(CONTENT_H * scale);
+    pagesHtml += `
+      <div class="rb-page-label">Page ${pg + 1} of ${pageCount}</div>
+      <div class="rb-page-sheet" style="height:${scaledH}px;aspect-ratio:unset;">
+        <div style="overflow:hidden;height:${scaledH}px;position:relative;">
+          <div style="position:absolute;top:0;left:0;right:0;
+            transform:scale(${scale}) translateY(${-offsetY}px);
+            transform-origin:top left;
+            width:${Math.round(100/scale)}%;">
+            ${bodyHtml}
+          </div>
+        </div>
+        ${rbSpillState.spillingEntries.some(s => s.page === pg) ?
+          '<div class="rb-spill-sheet-badge">⚠ Content splits here</div>' : ''}
+      </div>`;
+  }
+  floatContent.innerHTML = pagesHtml;
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  PAGE-SPILL DETECTION ENGINE
+// ═══════════════════════════════════════════════════════════════
+
+const rbSpillState = {
+  spillingEntries: [],   // [{idx, role, company, page}]
+  toastVisible: false,
+  toastTimer: null,
+};
+
+function rbDetectPageSpills() {
+  const tempDiv = document.getElementById('_rb_temp_measure');
+  if (!tempDiv) return;
+
+  const A4_H_PX   = 1123;
+  const PAD_H     = 46;
+  const CONTENT_H = A4_H_PX - PAD_H * 2;
+  const totalH    = tempDiv.scrollHeight;
+  const pageCount = Math.max(1, Math.ceil(totalH / CONTENT_H));
+
+  // Build a map of which page-Y-range each experience entry occupies
+  // We measure each entry block rendered inside tempDiv
+  // Strategy: look for data-exp-idx attributes on entry wrappers
+  const entryEls = tempDiv.querySelectorAll('[data-exp-idx]');
+  const newSpills = [];
+
+  entryEls.forEach(el => {
+    const idx    = el.dataset.expIdx;
+    const rect   = el.getBoundingClientRect();
+    const tempRect = tempDiv.getBoundingClientRect();
+    // top/bottom relative to tempDiv content
+    const elTop    = el.offsetTop;
+    const elBottom = elTop + el.offsetHeight;
+    const startPage = Math.floor(elTop    / CONTENT_H);
+    const endPage   = Math.floor((elBottom - 1) / CONTENT_H);
+
+    if (startPage !== endPage) {
+      const exp = rbState.experience[parseInt(idx)];
+      newSpills.push({
+        idx,
+        page: startPage,
+        role:    exp ? exp.role    : '',
+        company: exp ? exp.company : '',
+        bulletCount: exp ? exp.bullets.filter(b=>b.trim()).length : 0,
+      });
+    }
+  });
+
+  const prevSpillCount = rbSpillState.spillingEntries.length;
+  rbSpillState.spillingEntries = newSpills;
+
+  // Update accordion card borders + badge
+  document.querySelectorAll('.rb-exp-entry').forEach(card => {
+    const idx = card.dataset.idx;
+    const isSpilling = newSpills.some(s => s.idx === idx);
+    card.classList.toggle('spill-warn', isSpilling);
+    // Add/remove badge inside header
+    const titleEl = card.querySelector('.rb-entry-title');
+    if (titleEl) {
+      const existing = titleEl.querySelector('.rb-spill-badge');
+      if (isSpilling && !existing) {
+        const badge = document.createElement('span');
+        badge.className = 'rb-spill-badge';
+        badge.innerHTML = '⚠ spans pages';
+        titleEl.appendChild(badge);
+      } else if (!isSpilling && existing) {
+        existing.remove();
+      }
+    }
+  });
+
+  // Show/update spill toast if new spills appeared
+  if (newSpills.length > 0 && (newSpills.length !== prevSpillCount || !rbSpillState.toastVisible)) {
+    rbShowSpillToast(newSpills);
+  } else if (newSpills.length === 0) {
+    rbHideSpillToast();
+  }
+}
+
+function rbShowSpillToast(spills) {
+  rbHideSpillToast();
+  const names = spills.map(s => [s.role, s.company].filter(Boolean).join(' @ ')).join(', ');
+  const toast = document.createElement('div');
+  toast.id = 'rb-spill-toast';
+  toast.className = 'rb-spill-toast';
+  toast.innerHTML = `
+    <span class="rb-spill-toast-icon">⚠️</span>
+    <div class="rb-spill-toast-body">
+      <div class="rb-spill-toast-title">Entry spans across pages</div>
+      <div class="rb-spill-toast-msg">
+        <strong>${rbE(names)}</strong> splits across pages ${spills[0].page + 1} → ${spills[0].page + 2}.
+        Consider removing 1–2 bullets to keep it on one page, or adjust content above.
+      </div>
+    </div>
+    <button class="rb-spill-toast-close" onclick="rbHideSpillToast()">✕</button>`;
+  document.body.appendChild(toast);
+  rbSpillState.toastVisible = true;
+  // Auto-dismiss after 8s
+  clearTimeout(rbSpillState.toastTimer);
+  rbSpillState.toastTimer = setTimeout(rbHideSpillToast, 8000);
+}
+
+function rbHideSpillToast() {
+  const existing = document.getElementById('rb-spill-toast');
+  if (existing) existing.remove();
+  rbSpillState.toastVisible = false;
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  PREVIEW RENDER  (inline right-col + float panel)
+// ═══════════════════════════════════════════════════════════════
+
+// Internal: generate body HTML for chosen template
+function _rbBodyHtml() {
+  const tpl = rbState.template;
+  if      (tpl === 'tpm')     return rbRenderTPM();
+  else if (tpl === 'modern')  return rbRenderModern();
+  else if (tpl === 'minimal') return rbRenderMinimal();
+  else                        return rbRenderClassic();
+}
+
+// Paginate bodyHtml into page-sheets for a given container
+function _rbPaginateInto(container, bodyHtml, floatScale) {
+  const A4_H_PX   = 1123;
+  const PAD_H     = 46;
+  const CONTENT_H = A4_H_PX - PAD_H * 2;
+  const tempDiv   = document.getElementById('_rb_temp_measure');
+  if (!tempDiv || !container) return 1;
+  const pageCount = Math.max(1, Math.ceil(tempDiv.scrollHeight / CONTENT_H));
+
+  let html = '';
+  for (let pg = 0; pg < pageCount; pg++) {
+    const offsetY = pg * CONTENT_H;
+    const isSpill = rbSpillState.spillingEntries.some(s => s.page === pg);
+
+    if (floatScale) {
+      const scaledH = Math.round(CONTENT_H * floatScale);
+      html += `
+        <div class="rb-page-label">Page ${pg + 1} of ${pageCount}</div>
+        <div class="rb-page-sheet" style="height:${scaledH}px;aspect-ratio:unset;">
+          <div style="overflow:hidden;height:${scaledH}px;position:relative;">
+            <div style="position:absolute;top:0;left:0;
+              transform:scale(${floatScale}) translateY(${-offsetY}px);
+              transform-origin:top left;width:${Math.round(100/floatScale)}%;">
+              ${bodyHtml}
+            </div>
+          </div>
+          ${isSpill ? '<div class="rb-spill-sheet-badge">&#9888; Entry splits here — consider removing a bullet</div>' : ''}
+        </div>`;
+    } else {
+      html += `
+        <div class="rb-page-label">Page ${pg + 1} of ${pageCount}</div>
+        <div class="rb-page-sheet">
+          <div style="overflow:hidden;height:${CONTENT_H}px;position:relative;">
+            <div style="position:absolute;top:${-offsetY}px;left:0;right:0;">
+              ${bodyHtml}
+            </div>
+          </div>
+          ${isSpill ? '<div class="rb-spill-sheet-badge">&#9888; Entry splits here — consider removing a bullet</div>' : ''}
+        </div>`;
+    }
+  }
+  container.innerHTML = html;
+  return pageCount;
+}
+
+// Debounced master render — called by rbSync()
+let _rbPreviewTimer = null;
 function rbRenderPreview() {
-  clearTimeout(rbPreviewTimer);
-  rbPreviewTimer = setTimeout(_rbRenderPreviewImmediate, 120);
+  clearTimeout(_rbPreviewTimer);
+  _rbPreviewTimer = setTimeout(_rbRenderPreviewNow, 140);
+}
+
+function _rbRenderPreviewNow() {
+  // 1. Ensure measurement div exists + is up to date
+  let tempDiv = document.getElementById('_rb_temp_measure');
+  if (!tempDiv) {
+    tempDiv = document.createElement('div');
+    tempDiv.id = '_rb_temp_measure';
+    tempDiv.style.cssText = 'position:fixed;left:-9999px;top:0;width:694px;visibility:hidden;pointer-events:none;font-family:Arial,sans-serif;font-size:9.5pt;line-height:1.3;padding:46px 50px;box-sizing:border-box;';
+    document.body.appendChild(tempDiv);
+  }
+  const bodyHtml = _rbBodyHtml();
+  tempDiv.innerHTML = bodyHtml;
+
+  // 2. Run spill detection (needs tempDiv populated)
+  rbDetectPageSpills();
+
+  // 3. Render inline preview (right column)
+  const inlineContainer = document.getElementById('rb-preview-content');
+  if (inlineContainer) _rbPaginateInto(inlineContainer, bodyHtml, null);
+
+  // 4. Render float panel (if open)
+  if (rbFloatVisible) {
+    const floatContainer = document.getElementById('rb-float-content');
+    const floatPages     = document.getElementById('rb-float-page-count');
+    if (floatContainer) {
+      const count = _rbPaginateInto(floatContainer, bodyHtml, 0.63);
+      if (floatPages) floatPages.textContent = count === 1 ? '1 page' : count + ' pages';
+    }
+  }
 }
 
 init();
 initBuilder();
+rbInitFloatDrag();
 </script>
 </body>
 </html>
